@@ -9,6 +9,7 @@ import android.graphics.BitmapFactory
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -19,6 +20,7 @@ import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -341,6 +343,29 @@ private val AppSurfaceVariant = Color(0xFF19223A)
 private val AppPrimary = Color(0xFF9AA6FF)
 private val AppSecondary = Color(0xFFE8C77B)
 
+private fun rarityColors(rarity: Int): List<Color> = when (rarity) {
+    5 -> listOf(Color(0xFFFFE3A3), Color(0xFFC08A34))
+    4 -> listOf(Color(0xFFE3C2FF), Color(0xFF9856D6))
+    else -> listOf(Color(0xFFC7D0F0), Color(0xFF6672A8))
+}
+
+private fun elementColor(element: String): Color = when (element.trim().lowercase()) {
+    "pyro" -> Color(0xFFFF7A4D)
+    "hydro" -> Color(0xFF4FC3F7)
+    "cryo" -> Color(0xFF8CE8E4)
+    "electro" -> Color(0xFFC77DFF)
+    "anemo" -> Color(0xFF5FE0C6)
+    "geo" -> Color(0xFFFFCB4D)
+    "dendro" -> Color(0xFFA6E06B)
+    else -> AppPrimary
+}
+
+private fun rarityBorder(rarity: Int) = Modifier.border(
+    width = 1.5.dp,
+    brush = Brush.linearGradient(rarityColors(rarity)),
+    shape = RoundedCornerShape(14.dp)
+)
+
 @Composable
 private fun App(repository: DataRepository, store: Store) {
     var db by remember { mutableStateOf<DB?>(null) }
@@ -381,64 +406,64 @@ private fun App(repository: DataRepository, store: Store) {
             secondary = AppSecondary
         )
     ) {
-        Scaffold(
-            containerColor = AppBackground,
-            bottomBar = {
-                NavigationBar(containerColor = Color(0xFF0C1120)) {
-                    Tab.entries.forEach { currentTab ->
-                        NavigationBarItem(
-                            selected = tab == currentTab,
-                            onClick = { tab = currentTab },
-                            icon = { TabIcon(currentTab) },
-                            label = { Text(currentTab.label, fontSize = 9.sp) }
+        // Detail pages render full-screen (replacing the whole Scaffold, bottom
+        // nav included) instead of floating over it, so they read like a real
+        // profile page rather than a popup.
+        val character = selectedCharacter
+        val weapon = selectedWeapon
+        val artifact = selectedArtifact
+        val enemy = selectedEnemy
+        when {
+            character != null -> CharacterDetail(character, store) {
+                selectedCharacter = null
+                refresh++
+            }
+            weapon != null -> WeaponDetail(weapon) { selectedWeapon = null }
+            artifact != null -> ArtifactDetail(artifact) { selectedArtifact = null }
+            enemy != null -> EnemyDetail(enemy) { selectedEnemy = null }
+            else -> Scaffold(
+                containerColor = AppBackground,
+                bottomBar = {
+                    NavigationBar(containerColor = Color(0xFF0C1120)) {
+                        Tab.entries.forEach { currentTab ->
+                            NavigationBarItem(
+                                selected = tab == currentTab,
+                                onClick = { tab = currentTab },
+                                icon = { TabIcon(currentTab) },
+                                label = { Text(currentTab.label, fontSize = 9.sp) }
+                            )
+                        }
+                    }
+                }
+            ) { paddingValues ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                ) {
+                    when (tab) {
+                        Tab.HOME -> Home(
+                            db = loadedDb,
+                            store = store,
+                            openCharacters = { tab = Tab.CHAR },
+                            openWeapons = { tab = Tab.WEAPON },
+                            openTeams = { tab = Tab.TEAM },
+                            openTools = { tab = Tab.TOOLS }
+                        )
+                        Tab.CHAR -> Characters(loadedDb, store) { selectedCharacter = it }
+                        Tab.WEAPON -> Weapons(loadedDb) { selectedWeapon = it }
+                        Tab.ARTIFACT -> Artifacts(loadedDb) { selectedArtifact = it }
+                        Tab.TEAM -> Teams(loadedDb, store, refresh)
+                        Tab.TOOLS -> Tools()
+                        Tab.MORE -> More(
+                            db = loadedDb,
+                            store = store,
+                            repository = repository,
+                            openEnemy = { selectedEnemy = it },
+                            onChange = { refresh++ }
                         )
                     }
                 }
-            }
-        ) { paddingValues ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-            ) {
-                when (tab) {
-                    Tab.HOME -> Home(
-                        db = loadedDb,
-                        store = store,
-                        openCharacters = { tab = Tab.CHAR },
-                        openWeapons = { tab = Tab.WEAPON },
-                        openTeams = { tab = Tab.TEAM },
-                        openTools = { tab = Tab.TOOLS }
-                    )
-                    Tab.CHAR -> Characters(loadedDb, store) { selectedCharacter = it }
-                    Tab.WEAPON -> Weapons(loadedDb) { selectedWeapon = it }
-                    Tab.ARTIFACT -> Artifacts(loadedDb) { selectedArtifact = it }
-                    Tab.TEAM -> Teams(loadedDb, store, refresh)
-                    Tab.TOOLS -> Tools()
-                    Tab.MORE -> More(
-                        db = loadedDb,
-                        store = store,
-                        repository = repository,
-                        openEnemy = { selectedEnemy = it },
-                        onChange = { refresh++ }
-                    )
-                }
-            }
-
-            selectedCharacter?.let { character ->
-                CharacterDetail(character, store) {
-                    selectedCharacter = null
-                    refresh++
-                }
-            }
-            selectedWeapon?.let { weapon ->
-                WeaponDetail(weapon) { selectedWeapon = null }
-            }
-            selectedArtifact?.let { artifact ->
-                ArtifactDetail(artifact) { selectedArtifact = null }
-            }
-            selectedEnemy?.let { enemy ->
-                EnemyDetail(enemy) { selectedEnemy = null }
             }
         }
     }
@@ -483,25 +508,9 @@ private fun Home(
         contentPadding = PaddingValues(bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        item { Header("✦ Genshin Insight", "V6 Native Android · Auto-updating data") }
+        item { Spacer(Modifier.height(6.dp)) }
+        item { HomeHero(db, roster.size) }
         item { NewsAndBannerCard() }
-        item {
-            Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF151D35))) {
-                Column(Modifier.padding(17.dp)) {
-                    Text("Your Genshin Toolkit", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    Text(
-                        "Database karakter/senjata/artifact/musuh terupdate otomatis dari repo.",
-                        color = Color(0xFFADB8D2)
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Stat("${db.characters.size}", "Characters", Modifier.weight(1f))
-                        Stat("${db.weapons.size}", "Weapons", Modifier.weight(1f))
-                        Stat("${roster.size}", "My Roster", Modifier.weight(1f))
-                    }
-                }
-            }
-        }
         item { Text("Quick Access", fontSize = 18.sp, fontWeight = FontWeight.Bold) }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -561,10 +570,56 @@ private fun NewsAndBannerCard() {
 
 @Composable
 private fun Stat(value: String, label: String, modifier: Modifier) {
-    Card(modifier, colors = CardDefaults.cardColors(containerColor = Color(0xFF0E1426))) {
+    Card(modifier, colors = CardDefaults.cardColors(containerColor = Color(0x33FFFFFF))) {
         Column(Modifier.padding(9.dp)) {
-            Text(value, fontSize = 19.sp, fontWeight = FontWeight.Bold)
-            Text(label, fontSize = 9.sp, color = Color(0xFF8995B3))
+            Text(value, fontSize = 19.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            Text(label, fontSize = 9.sp, color = Color(0xFFE3E6F5))
+        }
+    }
+}
+
+@Composable
+private fun HomeHero(db: DB, rosterSize: Int) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+    ) {
+        Box(
+            Modifier.fillMaxWidth().background(
+                Brush.linearGradient(
+                    listOf(Color(0xFF3A2C6B), Color(0xFF5C3A8E), Color(0xFF9856D6))
+                )
+            )
+        ) {
+            Box(
+                Modifier.fillMaxWidth().background(
+                    Brush.radialGradient(
+                        listOf(Color(0x33FFE3A3), Color.Transparent),
+                        radius = 420f
+                    )
+                )
+            )
+            Column(Modifier.padding(18.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier.size(46.dp).clip(RoundedCornerShape(14.dp))
+                            .background(Brush.linearGradient(listOf(AppPrimary, AppSecondary))),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("✦", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color(0xFF201436))
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Column {
+                        Text("Genshin Insight", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        Text("Auto-updating companion · ~Dias~", fontSize = 10.sp, color = Color(0xFFE3E6F5))
+                    }
+                }
+                Spacer(Modifier.height(14.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Stat("${db.characters.size}", "Characters", Modifier.weight(1f))
+                    Stat("${db.weapons.size}", "Weapons", Modifier.weight(1f))
+                    Stat("$rosterSize", "My Roster", Modifier.weight(1f))
+                }
+            }
         }
     }
 }
@@ -691,11 +746,17 @@ private fun Characters(db: DB, store: Store, onSelect: (Character) -> Unit) {
         ) {
             gridItems(filtered) { character ->
                 Card(
-                    modifier = Modifier.clickable { onSelect(character) },
+                    modifier = Modifier.clickable { onSelect(character) }.then(rarityBorder(character.rarity)),
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF141B2F))
                 ) {
                     Column {
-                        ImageBox(label = character.name, url = character.icon, height = 155)
+                        Box {
+                            ImageBox(label = character.name, url = character.icon, height = 155)
+                            Box(
+                                Modifier.padding(6.dp).size(8.dp).clip(CircleShape)
+                                    .background(elementColor(character.element)).align(Alignment.TopEnd)
+                            )
+                        }
                         Column(Modifier.padding(8.dp)) {
                             Row {
                                 Text(
@@ -753,116 +814,200 @@ private fun OpenUrlButton(label: String, url: String) {
     }) { Text(label, fontSize = 11.sp) }
 }
 
+/**
+ * Full-screen detail page (hero image + gradient scrim + title block, content
+ * below) used for character/weapon/artifact/enemy detail. Replaces the old
+ * small AlertDialog popups with a HoYoLAB-style profile page. The caller is
+ * responsible for swapping this in for the whole Scaffold (see App()) so it
+ * isn't obscured by the bottom nav bar.
+ */
+@Composable
+private fun DetailScaffold(
+    title: String,
+    subtitle: String,
+    heroImage: String?,
+    accent: Color,
+    close: () -> Unit,
+    topActions: @Composable RowScope.() -> Unit = {},
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Box(Modifier.fillMaxSize().background(AppBackground)) {
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+            Box(Modifier.fillMaxWidth().height(260.dp)) {
+                Box(
+                    Modifier.fillMaxSize().background(
+                        Brush.linearGradient(listOf(accent.copy(alpha = 0.55f), Color(0xFF0A0F1F)))
+                    )
+                )
+                if (heroImage != null) {
+                    AsyncImage(
+                        model = heroImage,
+                        contentDescription = title,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                        alignment = Alignment.TopCenter
+                    )
+                }
+                Box(
+                    Modifier.fillMaxSize().background(
+                        Brush.verticalGradient(
+                            listOf(Color.Transparent, Color.Transparent, AppBackground),
+                            startY = 0.35f * 780f
+                        )
+                    )
+                )
+                Row(
+                    Modifier.fillMaxWidth().padding(10.dp).align(Alignment.TopCenter),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = close,
+                        modifier = Modifier.background(Color(0x66000000), CircleShape)
+                    ) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { topActions() }
+                }
+                Column(Modifier.align(Alignment.BottomStart).padding(horizontal = 16.dp, vertical = 12.dp)) {
+                    Text(title, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    if (subtitle.isNotBlank()) {
+                        Text(subtitle, fontSize = 12.sp, color = Color(0xFFE7E9F5))
+                    }
+                }
+            }
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                content()
+            }
+        }
+    }
+}
+
 @Composable
 private fun CharacterDetail(character: Character, store: Store, close: () -> Unit) {
     var section by remember { mutableStateOf("Overview") }
     var inRoster by remember { mutableStateOf(store.get("roster").contains(character.id)) }
     var favorite by remember { mutableStateOf(store.get("fav").contains(character.id)) }
     var note by remember { mutableStateOf(store.note(character.id)) }
+    val accent = elementColor(character.element)
 
-    AlertDialog(
-        onDismissRequest = close,
-        confirmButton = { TextButton(onClick = close) { Text("Close") } },
-        title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(character.name, Modifier.weight(1f))
-                IconButton(onClick = {
+    DetailScaffold(
+        title = character.name,
+        subtitle = "${character.rarity}★ · ${character.element} · ${character.weapon} · ${character.region}",
+        heroImage = character.card ?: character.splash ?: character.icon,
+        accent = accent,
+        close = close,
+        topActions = {
+            IconButton(
+                onClick = {
                     favorite = !favorite
                     val values = store.get("fav").toMutableSet()
                     if (favorite) values.add(character.id) else values.remove(character.id)
                     store.set("fav", values)
-                }) {
-                    Icon(
-                        if (favorite) Icons.Default.Star else Icons.Default.StarBorder,
-                        contentDescription = "Favorite"
+                },
+                modifier = Modifier.background(Color(0x66000000), CircleShape)
+            ) {
+                Icon(
+                    if (favorite) Icons.Default.Star else Icons.Default.StarBorder,
+                    contentDescription = "Favorite",
+                    tint = if (favorite) AppSecondary else Color.White
+                )
+            }
+        }
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.horizontalScroll(rememberScrollState())
+        ) {
+            listOf("Overview", "Talents", "Constellations", "Build").forEach { value ->
+                FilterChip(
+                    selected = section == value,
+                    onClick = { section = value },
+                    label = { Text(value, fontSize = 9.sp) },
+                    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = accent.copy(alpha = 0.35f))
+                )
+            }
+        }
+        RarityCard(character.rarity) {
+            when (section) {
+                "Overview" -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (character.title.isNotBlank()) Text("\"${character.title}\"", color = Color(0xFFB9C4F7), fontWeight = FontWeight.SemiBold)
+                    if (character.description.isNotBlank()) {
+                        Text(character.description, fontSize = 12.sp, color = Color(0xFFB6C1DA))
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.horizontalScroll(rememberScrollState())
+                    ) {
+                        OpenUrlButton("📖 Guide di KQM", character.guideUrl)
+                        OpenUrlButton(
+                            "▶ Cari di YouTube",
+                            "https://www.youtube.com/results?search_query=${Uri.encode(character.name + " Genshin build guide")}"
+                        )
+                        if (character.fandomUrl != null) {
+                            OpenUrlButton("📜 Lore Lengkap", character.fandomUrl)
+                        }
+                    }
+                }
+                "Talents" -> if (character.talents.isEmpty() && character.passives.isEmpty()) {
+                    Missing("Normal Attack", "Elemental Skill", "Elemental Burst", "Passive 1–4")
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        character.talents.forEach { InfoBlock(it.name, it.description) }
+                        character.passives.forEach { InfoBlock(it.name, it.description) }
+                    }
+                }
+                "Constellations" -> if (character.constellations.isEmpty()) {
+                    Missing("Constellation C1–C6")
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        character.constellations.forEach { InfoBlock("${it.level.uppercase()} · ${it.name}", it.description) }
+                    }
+                }
+                "Build" -> Column {
+                    Text("Build Workspace", fontWeight = FontWeight.Bold)
+                    Text(
+                        "Weapon / Artifact / Main Stat / Sub Stat / Rotation",
+                        fontSize = 11.sp,
+                        color = Color(0xFF9DA9C7)
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    OutlinedTextField(
+                        value = note,
+                        onValueChange = {
+                            note = it
+                            store.note(character.id, it)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Build notes") }
                     )
                 }
             }
-        },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState())) {
-                ImageBox(character.name, character.card ?: character.icon, 170)
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.horizontalScroll(rememberScrollState())
-                ) {
-                    listOf("Overview", "Talents", "Constellations", "Build").forEach { value ->
-                        FilterChip(
-                            selected = section == value,
-                            onClick = { section = value },
-                            label = { Text(value, fontSize = 9.sp) }
-                        )
-                    }
-                }
-                Spacer(Modifier.height(7.dp))
-                when (section) {
-                    "Overview" -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("${character.rarity}★ · ${character.element} · ${character.weapon}")
-                        Text("Region: ${character.region}")
-                        if (character.title.isNotBlank()) Text("\"${character.title}\"", color = Color(0xFFB9C4F7))
-                        if (character.description.isNotBlank()) {
-                            Text(character.description, fontSize = 11.sp, color = Color(0xFF9DA9C7))
-                        }
-                        Spacer(Modifier.height(6.dp))
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier.horizontalScroll(rememberScrollState())
-                        ) {
-                            OpenUrlButton("📖 Guide di KQM", character.guideUrl)
-                            OpenUrlButton(
-                                "▶ Cari di YouTube",
-                                "https://www.youtube.com/results?search_query=${Uri.encode(character.name + " Genshin build guide")}"
-                            )
-                            if (character.fandomUrl != null) {
-                                OpenUrlButton("📜 Lore Lengkap", character.fandomUrl)
-                            }
-                        }
-                    }
-                    "Talents" -> if (character.talents.isEmpty() && character.passives.isEmpty()) {
-                        Missing("Normal Attack", "Elemental Skill", "Elemental Burst", "Passive 1–4")
-                    } else {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            character.talents.forEach { InfoBlock(it.name, it.description) }
-                            character.passives.forEach { InfoBlock(it.name, it.description) }
-                        }
-                    }
-                    "Constellations" -> if (character.constellations.isEmpty()) {
-                        Missing("Constellation C1–C6")
-                    } else {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            character.constellations.forEach { InfoBlock("${it.level.uppercase()} · ${it.name}", it.description) }
-                        }
-                    }
-                    "Build" -> Column {
-                        Text("Build Workspace", fontWeight = FontWeight.Bold)
-                        Text(
-                            "Weapon / Artifact / Main Stat / Sub Stat / Rotation",
-                            fontSize = 11.sp,
-                            color = Color(0xFF9DA9C7)
-                        )
-                        OutlinedTextField(
-                            value = note,
-                            onValueChange = {
-                                note = it
-                                store.note(character.id, it)
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            label = { Text("Build notes") }
-                        )
-                    }
-                }
-                Spacer(Modifier.height(8.dp))
-                Button(onClick = {
-                    inRoster = !inRoster
-                    val values = store.get("roster").toMutableSet()
-                    if (inRoster) values.add(character.id) else values.remove(character.id)
-                    store.set("roster", values)
-                }) {
-                    Text(if (inRoster) "Remove from My Roster" else "Add to My Roster")
-                }
-            }
         }
-    )
+        Button(
+            onClick = {
+                inRoster = !inRoster
+                val values = store.get("roster").toMutableSet()
+                if (inRoster) values.add(character.id) else values.remove(character.id)
+                store.set("roster", values)
+            },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = accent)
+        ) {
+            Text(if (inRoster) "Remove from My Roster" else "Add to My Roster", color = Color(0xFF0C1120), fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+private fun RarityCard(rarity: Int, content: @Composable ColumnScope.() -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth().then(rarityBorder(rarity)),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF141B2F))
+    ) {
+        Column(Modifier.padding(14.dp), content = content)
+    }
 }
 
 @Composable
@@ -942,7 +1087,7 @@ private fun Weapons(db: DB, onSelect: (Weapon) -> Unit) {
         ) {
             gridItems(filtered) { weapon ->
                 Card(
-                    modifier = Modifier.clickable { onSelect(weapon) },
+                    modifier = Modifier.clickable { onSelect(weapon) }.then(rarityBorder(weapon.rarity)),
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF141B2F))
                 ) {
                     Column {
@@ -952,7 +1097,7 @@ private fun Weapons(db: DB, onSelect: (Weapon) -> Unit) {
                             Text(
                                 "${weapon.type} · ${"★".repeat(weapon.rarity)}",
                                 fontSize = 10.sp,
-                                color = Color(0xFF9DA9C7)
+                                color = rarityColors(weapon.rarity).first()
                             )
                         }
                     }
@@ -964,35 +1109,37 @@ private fun Weapons(db: DB, onSelect: (Weapon) -> Unit) {
 
 @Composable
 private fun WeaponDetail(weapon: Weapon, close: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = close,
-        confirmButton = { TextButton(onClick = close) { Text("Close") } },
-        title = { Text(weapon.name) },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState())) {
-                ImageBox(weapon.name, weapon.icon, 170)
-                Text("${weapon.rarity}★ · ${weapon.type}")
-                if (weapon.baseAtk != null) {
-                    Text("Base ATK: ${weapon.baseAtk.toInt()} · ${weapon.mainStat} ${weapon.mainStatValue}", fontSize = 11.sp, color = Color(0xFF9DA9C7))
-                }
-                if (weapon.description.isNotBlank()) {
-                    Spacer(Modifier.height(6.dp))
-                    Text(weapon.description, fontSize = 11.sp, color = Color(0xFF9DA9C7))
-                }
-                Spacer(Modifier.height(8.dp))
-                if (weapon.effectName.isNotBlank()) {
-                    Text(weapon.effectName, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                }
-                if (weapon.refinements.isEmpty()) {
-                    Missing("Passive", "Refinement R1–R5")
-                } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        weapon.refinements.forEach { InfoBlock(it.refinement, it.description) }
-                    }
+    val accent = rarityColors(weapon.rarity).first()
+    DetailScaffold(
+        title = weapon.name,
+        subtitle = "${weapon.rarity}★ · ${weapon.type}",
+        heroImage = weapon.icon,
+        accent = accent,
+        close = close
+    ) {
+        RarityCard(weapon.rarity) {
+            if (weapon.baseAtk != null) {
+                Text("Base ATK: ${weapon.baseAtk.toInt()} · ${weapon.mainStat} ${weapon.mainStatValue}", fontSize = 12.sp, color = Color(0xFFB6C1DA))
+            }
+            if (weapon.description.isNotBlank()) {
+                Spacer(Modifier.height(6.dp))
+                Text(weapon.description, fontSize = 12.sp, color = Color(0xFFB6C1DA))
+            }
+        }
+        RarityCard(weapon.rarity) {
+            if (weapon.effectName.isNotBlank()) {
+                Text(weapon.effectName, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = accent)
+                Spacer(Modifier.height(6.dp))
+            }
+            if (weapon.refinements.isEmpty()) {
+                Missing("Passive", "Refinement R1–R5")
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    weapon.refinements.forEach { InfoBlock(it.refinement, it.description) }
                 }
             }
         }
-    )
+    }
 }
 
 @Composable
@@ -1048,45 +1195,49 @@ private fun Artifacts(db: DB, onSelect: (Artifact) -> Unit) {
 
 @Composable
 private fun ArtifactDetail(artifact: Artifact, close: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = close,
-        confirmButton = { TextButton(onClick = close) { Text("Close") } },
-        title = { Text(artifact.name) },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState())) {
-                if (artifact.effect2Pc.isNotBlank()) {
-                    Text("2-Piece", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                    Text(artifact.effect2Pc, fontSize = 11.sp, color = Color(0xFF9DA9C7))
-                    Spacer(Modifier.height(6.dp))
-                }
-                if (artifact.effect4Pc.isNotBlank()) {
-                    Text("4-Piece", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                    Text(artifact.effect4Pc, fontSize = 11.sp, color = Color(0xFF9DA9C7))
-                }
-                if (artifact.pieces.isNotEmpty()) {
-                    Spacer(Modifier.height(10.dp))
-                    Text("Pieces", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                    artifact.pieces.forEach { piece ->
-                        Row(Modifier.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
-                            if (piece.image != null) {
-                                AsyncImage(
-                                    model = piece.image,
-                                    contentDescription = piece.name,
-                                    modifier = Modifier.size(34.dp).clip(RoundedCornerShape(6.dp)),
-                                    contentScale = ContentScale.Crop
-                                )
-                                Spacer(Modifier.width(8.dp))
-                            }
-                            Column {
-                                Text(piece.name, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                                Text(piece.slot.replaceFirstChar { it.uppercase() }, fontSize = 9.sp, color = Color(0xFF77839F))
-                            }
+    val accent = rarityColors(artifact.rarity).first()
+    DetailScaffold(
+        title = artifact.name,
+        subtitle = "${artifact.rarity}★ Artifact Set",
+        heroImage = artifact.pieces.firstOrNull()?.image,
+        accent = accent,
+        close = close
+    ) {
+        RarityCard(artifact.rarity) {
+            if (artifact.effect2Pc.isNotBlank()) {
+                Text("2-Piece", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = accent)
+                Text(artifact.effect2Pc, fontSize = 12.sp, color = Color(0xFFB6C1DA))
+                Spacer(Modifier.height(8.dp))
+            }
+            if (artifact.effect4Pc.isNotBlank()) {
+                Text("4-Piece", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = accent)
+                Text(artifact.effect4Pc, fontSize = 12.sp, color = Color(0xFFB6C1DA))
+            }
+        }
+        if (artifact.pieces.isNotEmpty()) {
+            RarityCard(artifact.rarity) {
+                Text("Pieces", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                Spacer(Modifier.height(4.dp))
+                artifact.pieces.forEach { piece ->
+                    Row(Modifier.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (piece.image != null) {
+                            AsyncImage(
+                                model = piece.image,
+                                contentDescription = piece.name,
+                                modifier = Modifier.size(38.dp).clip(RoundedCornerShape(8.dp)),
+                                contentScale = ContentScale.Crop
+                            )
+                            Spacer(Modifier.width(8.dp))
+                        }
+                        Column {
+                            Text(piece.name, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            Text(piece.slot.replaceFirstChar { it.uppercase() }, fontSize = 9.sp, color = Color(0xFF77839F))
                         }
                     }
                 }
             }
         }
-    )
+    }
 }
 
 @Composable
@@ -1388,33 +1539,28 @@ private fun EnemiesScreen(db: DB, onBack: () -> Unit, onSelect: (Enemy) -> Unit)
 
 @Composable
 private fun EnemyDetail(enemy: Enemy, close: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = close,
-        confirmButton = { TextButton(onClick = close) { Text("Close") } },
-        title = { Text(enemy.name) },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (enemy.icon != null) {
-                    ImageBox(enemy.name, enemy.icon, 130)
-                }
-                Text("${enemy.category} · ${enemy.element}", fontWeight = FontWeight.Bold)
-                Text("Region: ${enemy.region}")
-                if (enemy.description.isNotBlank()) {
-                    Spacer(Modifier.height(4.dp))
-                    Text(enemy.description, fontSize = 11.sp, color = Color(0xFF9DA9C7))
-                }
-                if (enemy.drops.isNotEmpty()) {
-                    Spacer(Modifier.height(4.dp))
-                    Text("Drops", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                    Text(enemy.drops.joinToString(" · "), fontSize = 11.sp, color = Color(0xFF9DA9C7))
-                }
-                if (enemy.description.isBlank() && enemy.drops.isEmpty()) {
-                    Spacer(Modifier.height(4.dp))
-                    Missing("HP / level scaling", "Elemental & physical resistance", "Skills / mechanics", "Location / domain")
-                }
+    val accent = if (enemy.category.contains("Boss", ignoreCase = true)) Color(0xFFE05A5A) else elementColor(enemy.element)
+    DetailScaffold(
+        title = enemy.name,
+        subtitle = "${enemy.category} · ${enemy.element} · ${enemy.region}",
+        heroImage = enemy.icon,
+        accent = accent,
+        close = close
+    ) {
+        RarityCard(0) {
+            if (enemy.description.isNotBlank()) {
+                Text(enemy.description, fontSize = 12.sp, color = Color(0xFFB6C1DA))
+            }
+            if (enemy.drops.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                Text("Drops", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = accent)
+                Text(enemy.drops.joinToString(" · "), fontSize = 11.sp, color = Color(0xFFB6C1DA))
+            }
+            if (enemy.description.isBlank() && enemy.drops.isEmpty()) {
+                Missing("HP / level scaling", "Elemental & physical resistance", "Skills / mechanics", "Location / domain")
             }
         }
-    )
+    }
 }
 
 @Composable
