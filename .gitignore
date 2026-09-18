@@ -11,3 +11,6 @@ android/.cxx/
 # Node (data generator)
 scripts/node_modules/
 scripts/package-lock.json
+
+# Root-level IDE project files (opening android/ in Android Studio is enough)
+.idea/

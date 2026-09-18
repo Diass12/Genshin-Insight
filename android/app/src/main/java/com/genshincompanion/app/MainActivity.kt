@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -100,7 +101,8 @@ private data class Enemy(
     val element: String,
     val region: String,
     val description: String,
-    val drops: List<String>
+    val drops: List<String>,
+    val icon: String?
 )
 
 private data class Team(val name: String, val core: List<String>, val focus: String)
@@ -268,7 +270,8 @@ private data class DB(
                         element = item.optString("element", "None"),
                         region = item.optString("region", "Teyvat"),
                         description = item.optString("description"),
-                        drops = stringList(item, "drops")
+                        drops = stringList(item, "drops"),
+                        icon = item.optString("icon").ifBlank { null }
                     )
                 )
             }
@@ -574,7 +577,7 @@ private fun Characters(db: DB, store: Store, onSelect: (Character) -> Unit) {
         )
         Row(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier.padding(vertical = 6.dp)
+            modifier = Modifier.padding(vertical = 6.dp).horizontalScroll(rememberScrollState())
         ) {
             listOf("All", "Pyro", "Hydro", "Cryo", "Electro", "Anemo", "Geo", "Dendro").forEach { value ->
                 FilterChip(
@@ -584,7 +587,10 @@ private fun Characters(db: DB, store: Store, onSelect: (Character) -> Unit) {
                 )
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            modifier = Modifier.horizontalScroll(rememberScrollState())
+        ) {
             FilterChip(
                 selected = mineOnly,
                 onClick = { mineOnly = !mineOnly },
@@ -705,7 +711,10 @@ private fun CharacterDetail(character: Character, store: Store, close: () -> Uni
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 ImageBox(character.name, character.card ?: character.icon, 170)
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.horizontalScroll(rememberScrollState())
+                ) {
                     listOf("Overview", "Talents", "Constellations", "Build").forEach { value ->
                         FilterChip(
                             selected = section == value,
@@ -819,7 +828,7 @@ private fun Weapons(db: DB, onSelect: (Weapon) -> Unit) {
         )
         Row(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier.padding(vertical = 6.dp)
+            modifier = Modifier.padding(vertical = 6.dp).horizontalScroll(rememberScrollState())
         ) {
             listOf("All", "Sword", "Claymore", "Polearm", "Bow", "Catalyst").forEach { value ->
                 FilterChip(
@@ -829,7 +838,10 @@ private fun Weapons(db: DB, onSelect: (Weapon) -> Unit) {
                 )
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.horizontalScroll(rememberScrollState())
+        ) {
             listOf("All", "5", "4").forEach { value ->
                 FilterChip(
                     selected = rarity == value,
@@ -1260,7 +1272,7 @@ private fun EnemiesScreen(db: DB, onBack: () -> Unit, onSelect: (Enemy) -> Unit)
             item {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.padding(bottom = 8.dp)
+                    modifier = Modifier.padding(bottom = 8.dp).horizontalScroll(rememberScrollState())
                 ) {
                     categories.forEach { c ->
                         FilterChip(selected = category == c, onClick = { category = c }, label = { Text(c, fontSize = 9.sp) })
@@ -1273,7 +1285,18 @@ private fun EnemiesScreen(db: DB, onBack: () -> Unit, onSelect: (Enemy) -> Unit)
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF141B2F))
                 ) {
-                    Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            Modifier.size(38.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFF252F51)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (enemy.icon != null) {
+                                AsyncImage(model = enemy.icon, contentDescription = enemy.name, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                            } else {
+                                Text(enemy.name.take(1), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
                             Text(enemy.name, fontWeight = FontWeight.Bold)
                             Text("${enemy.category} · ${enemy.element} · ${enemy.region}", fontSize = 11.sp, color = Color(0xFFB6C1DA))
@@ -1294,6 +1317,9 @@ private fun EnemyDetail(enemy: Enemy, close: () -> Unit) {
         title = { Text(enemy.name) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (enemy.icon != null) {
+                    ImageBox(enemy.name, enemy.icon, 130)
+                }
                 Text("${enemy.category} · ${enemy.element}", fontWeight = FontWeight.Bold)
                 Text("Region: ${enemy.region}")
                 if (enemy.description.isNotBlank()) {
@@ -1357,7 +1383,10 @@ private fun WallpaperGallery(db: DB, onBack: () -> Unit) {
             IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") }
             Column { Text("Wallpaper Gallery", fontSize = 24.sp, fontWeight = FontWeight.Bold); Text("~Dias~ Collection", fontSize = 11.sp, color = AppSecondary) }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            modifier = Modifier.horizontalScroll(rememberScrollState())
+        ) {
             listOf("All", "Character", "Region", "Mobile").forEach { c -> FilterChip(selected = category == c, onClick = { category = c }, label = { Text(c, fontSize = 9.sp) }) }
         }
         if (status.isNotEmpty()) Text(status, color = AppPrimary, fontSize = 10.sp, modifier = Modifier.padding(vertical = 5.dp))

@@ -26,13 +26,34 @@ function pickImage(images, ...keys) {
   return null;
 }
 
+// enka.network mirrors the game's own UI_* texture files directly and is
+// far more reliable than genshin-db's "mihoyo_*" URLs, which point at
+// miHoYo's BBS showcase cache and 404 for a large fraction of characters/
+// weapons (confirmed by spot-checking Arlecchino, Wriothesley, Neuvillette,
+// Athame Artis, etc. - even long-released ones). Prefer the deterministic
+// Enka URL built from filename_icon, and only fall back to the genshin-db
+// hosted fields if no filename is available at all.
+function enkaUrl(filenameIcon) {
+  return filenameIcon ? `https://enka.network/ui/${filenameIcon}.png` : null;
+}
+
+// gi.yatta.moe mirrors monster/boss icons the same way (genshin-db exposes
+// no hosted URL for these at all, only the bare filename).
+function monsterIconUrl(filenameIcon) {
+  return filenameIcon ? `https://gi.yatta.moe/assets/UI/monster/${filenameIcon}.png` : null;
+}
+
 function buildCharacters() {
   const names = genshindb.characters('names', { matchCategories: true });
   const out = [];
   for (const name of names) {
     const c = genshindb.characters(name);
     if (!c || !c.weaponType || !c.elementType) continue; // skip non-playable entries
-    if (!['BODY_BOY', 'BODY_GIRL', 'BODY_MALE', 'BODY_LADY'].includes(c.bodyType)) continue;
+    // Playable characters are always QUALITY_ORANGE (5*) or QUALITY_PURPLE (4*).
+    // bodyType has many values (BODY_LOLI, BODY_BOY, BODY_LADY, ...) and using
+    // an allowlist previously dropped valid characters like Iansan - quality
+    // is the reliable signal instead.
+    if (!['QUALITY_ORANGE', 'QUALITY_PURPLE'].includes(c.qualityType)) continue;
 
     const talentData = genshindb.talents(name);
     const constellationData = genshindb.constellations(name);
@@ -51,8 +72,8 @@ function buildCharacters() {
       birthday: c.birthday || '',
       cvEnglish: c.cv?.english || '',
       cvJapanese: c.cv?.japanese || '',
-      icon: pickImage(c.images, 'mihoyo_icon', 'icon'),
-      sideIcon: pickImage(c.images, 'mihoyo_sideIcon', 'sideIcon'),
+      icon: enkaUrl(c.images?.filename_icon) || pickImage(c.images, 'hoyowiki_icon', 'mihoyo_icon', 'icon'),
+      sideIcon: enkaUrl(c.images?.filename_sideIcon) || pickImage(c.images, 'mihoyo_sideIcon', 'sideIcon'),
       card: pickImage(c.images, 'card'),
       portrait: pickImage(c.images, 'portrait'),
       splash: pickImage(c.images, 'cover1', 'cover2'),
@@ -91,8 +112,8 @@ function buildWeapons() {
       refinements: ['r1', 'r2', 'r3', 'r4', 'r5']
         .filter((k) => w[k])
         .map((k) => ({ refinement: k.toUpperCase(), description: w[k].description })),
-      icon: pickImage(w.images, 'mihoyo_icon', 'icon'),
-      awakenIcon: pickImage(w.images, 'mihoyo_awakenIcon', 'awakenicon'),
+      icon: enkaUrl(w.images?.filename_icon) || pickImage(w.images, 'mihoyo_icon', 'icon'),
+      awakenIcon: enkaUrl(w.images?.filename_awakenIcon) || pickImage(w.images, 'mihoyo_awakenIcon', 'awakenicon'),
     });
   }
   return out.sort((a, b) => b.rarity - a.rarity || a.name.localeCompare(b.name));
@@ -110,7 +131,7 @@ function buildArtifacts() {
         slot: k,
         name: a[k].name,
         description: a[k].description || '',
-        image: pickImage(a.images, `mihoyo_${k}`, k),
+        image: enkaUrl(a.images?.[`filename_${k}`]) || pickImage(a.images, `mihoyo_${k}`, k),
       }));
     out.push({
       id: slug(a.name),
@@ -141,6 +162,7 @@ function buildEnemies() {
       region: curated.region || 'Teyvat',
       description: match?.description || '',
       drops: match ? (match.rewardPreview || []).filter((r) => r.name !== 'Mora').map((r) => r.name) : [],
+      icon: monsterIconUrl(match?.images?.filename_icon),
     });
   }
   return out;
