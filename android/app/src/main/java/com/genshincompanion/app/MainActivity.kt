@@ -450,6 +450,19 @@ private fun elementColor(element: String): Color = when (element.trim().lowercas
     else -> AppPrimary
 }
 
+// Official element symbols (fandom wiki mirror, verified reachable) - the
+// small element circle used to just be a flat color dot with no actual icon.
+private fun elementIconUrl(element: String): String? = when (element.trim().lowercase()) {
+    "pyro" -> "https://static.wikia.nocookie.net/gensin-impact/images/e/e8/Element_Pyro.png"
+    "hydro" -> "https://static.wikia.nocookie.net/gensin-impact/images/3/35/Element_Hydro.png"
+    "cryo" -> "https://static.wikia.nocookie.net/gensin-impact/images/8/88/Element_Cryo.png"
+    "electro" -> "https://static.wikia.nocookie.net/gensin-impact/images/7/73/Element_Electro.png"
+    "anemo" -> "https://static.wikia.nocookie.net/gensin-impact/images/a/a4/Element_Anemo.png"
+    "geo" -> "https://static.wikia.nocookie.net/gensin-impact/images/4/4a/Element_Geo.png"
+    "dendro" -> "https://static.wikia.nocookie.net/gensin-impact/images/f/f4/Element_Dendro.png"
+    else -> null
+}
+
 private fun rarityBorder(rarity: Int) = Modifier.border(
     width = 1.5.dp,
     brush = Brush.linearGradient(rarityColors(rarity)),
@@ -892,10 +905,18 @@ private fun Characters(db: DB, store: Store, onSelect: (Character) -> Unit) {
                                 }
                             }
                             Box(
-                                Modifier.size(20.dp).clip(CircleShape)
-                                    .background(elementColor(character.element))
-                                    .border(1.5.dp, Color(0xFF141B2F), CircleShape)
-                            )
+                                Modifier.size(22.dp).clip(CircleShape)
+                                    .background(Color(0xFF141B2F))
+                                    .border(1.5.dp, Color(0xFF141B2F), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                val elIcon = elementIconUrl(character.element)
+                                if (elIcon != null) {
+                                    AsyncImage(model = elIcon, contentDescription = character.element, modifier = Modifier.size(17.dp))
+                                } else {
+                                    Box(Modifier.size(12.dp).clip(CircleShape).background(elementColor(character.element)))
+                                }
+                            }
                             if (favorites.contains(character.id)) {
                                 Box(
                                     Modifier.align(Alignment.TopStart).size(18.dp).clip(CircleShape)
