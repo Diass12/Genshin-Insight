@@ -1,0 +1,6 @@
+{
+  "generatedAt": null,
+  "source": "genshin-db",
+  "counts": { "characters": 0, "weapons": 0, "artifacts": 0, "enemies": 0, "domains": 0 },
+  "note": "Placeholder. Populated automatically by .github/workflows/update-data.yml after the first run."
+}

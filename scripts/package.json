@@ -1,0 +1,12 @@
+{
+  "name": "genshin-insight-data",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Generates the JSON data package consumed by the Genshin Insight Android app, sourced from genshin-db.",
+  "scripts": {
+    "generate": "node generate-data.js"
+  },
+  "dependencies": {
+    "genshin-db": "^5.1.0"
+  }
+}
