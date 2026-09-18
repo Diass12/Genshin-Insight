@@ -209,9 +209,12 @@ const CURATED_ENEMIES = require('./curated-enemies.json');
 
 function buildEnemies() {
   const out = [];
+  const seen = new Set();
+
   for (const curated of CURATED_ENEMIES) {
     const match = genshindb.enemies(curated.name) || genshindb.enemies(curated.id.replace(/_/g, ' '));
     const matchId = genshindb.enemies(curated.name, ID_LANG) || genshindb.enemies(curated.id.replace(/_/g, ' '), ID_LANG);
+    seen.add((match?.name || curated.name).toLowerCase());
     out.push({
       id: curated.id,
       name: curated.name,
@@ -224,6 +227,33 @@ function buildEnemies() {
       icon: monsterIconUrl(match?.images?.filename_icon),
     });
   }
+
+  // Auto-discover any boss-tier enemy genshin-db knows about that the
+  // hand-curated list missed. Relying on hand-curation alone silently drops
+  // new bosses added in later patches (e.g. Aeonblight Drake) until someone
+  // notices and updates curated-enemies.json by hand - this keeps the boss
+  // list self-healing instead. Region/element aren't reliably available for
+  // these, so they're marked generic rather than guessed.
+  const allNames = genshindb.enemies('names', { matchCategories: true });
+  for (const name of allNames) {
+    if (seen.has(name.toLowerCase())) continue;
+    const e = genshindb.enemies(name);
+    if (!e || e.monsterType !== 'MONSTER_BOSS') continue;
+    seen.add(name.toLowerCase());
+    const eId = genshindb.enemies(name, ID_LANG);
+    out.push({
+      id: slug(e.name),
+      name: e.name,
+      category: 'Boss',
+      element: 'Various',
+      region: 'Teyvat',
+      description: e.description || '',
+      descriptionId: eId?.description || '',
+      drops: (e.rewardPreview || []).filter((r) => r.name !== 'Mora').map((r) => r.name),
+      icon: monsterIconUrl(e.images?.filename_icon),
+    });
+  }
+
   return out;
 }
 
