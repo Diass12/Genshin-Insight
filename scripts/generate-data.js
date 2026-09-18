@@ -77,6 +77,7 @@ function buildCharacters() {
       card: pickImage(c.images, 'card'),
       portrait: pickImage(c.images, 'portrait'),
       splash: pickImage(c.images, 'cover1', 'cover2'),
+      fandomUrl: c.url?.fandom || null,
       ascensionCosts: c.costs || null,
       talents: (talentData ? [talentData.combat1, talentData.combat2, talentData.combat3]
         .filter(Boolean)

@@ -65,6 +65,7 @@ private data class Character(
     val icon: String?,
     val card: String?,
     val splash: String?,
+    val fandomUrl: String?,
     val talents: List<TalentInfo>,
     val passives: List<TalentInfo>,
     val constellations: List<ConstellationInfo>,
@@ -189,6 +190,7 @@ private data class DB(
                         icon = item.optString("icon").ifBlank { null },
                         card = item.optString("card").ifBlank { null },
                         splash = item.optString("splash").ifBlank { null },
+                        fandomUrl = item.optString("fandomUrl").ifBlank { null },
                         talents = talents,
                         passives = passives,
                         constellations = constellations,
@@ -733,12 +735,18 @@ private fun CharacterDetail(character: Character, store: Store, close: () -> Uni
                             Text(character.description, fontSize = 11.sp, color = Color(0xFF9DA9C7))
                         }
                         Spacer(Modifier.height(6.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.horizontalScroll(rememberScrollState())
+                        ) {
                             OpenUrlButton("📖 Guide di KQM", character.guideUrl)
                             OpenUrlButton(
                                 "▶ Cari di YouTube",
                                 "https://www.youtube.com/results?search_query=${Uri.encode(character.name + " Genshin build guide")}"
                             )
+                            if (character.fandomUrl != null) {
+                                OpenUrlButton("📜 Lore Lengkap", character.fandomUrl)
+                            }
                         }
                     }
                     "Talents" -> if (character.talents.isEmpty() && character.passives.isEmpty()) {
@@ -1440,6 +1448,20 @@ private val TipTopics = listOf(
     CreatorLink("Strategi Gacha", "Genshin Impact strategi gacha")
 )
 
+// genshin-db doesn't have quest/puzzle walkthrough data at all (only game
+// stats), and quest names/steps are the kind of thing that's easy to
+// misremember or which goes stale after a patch. Rather than hand-writing
+// steps from memory and risking wrong info, these deep-link to a live search
+// so results always reflect the current patch - covering puzzle categories
+// that stay relevant across regions/updates instead of one-off quest names.
+private val QuestTopics = listOf(
+    CreatorLink("Quest Tersulit Patch Terbaru", "Genshin Impact quest paling susah patch terbaru walkthrough"),
+    CreatorLink("Puzzle Aranara (Sumeru/Vanarana)", "Genshin Impact Aranara puzzle walkthrough"),
+    CreatorLink("Puzzle Electroculus & Seelie", "Genshin Impact electro seelie puzzle guide"),
+    CreatorLink("World Quest yang Bikin Bingung", "Genshin Impact world quest confusing walkthrough guide"),
+    CreatorLink("Puzzle Domain / Mekanisme Tersembunyi", "Genshin Impact hidden domain puzzle mechanism guide")
+)
+
 @Composable
 private fun CommunityScreen(onBack: () -> Unit) {
     val context = LocalContext.current
@@ -1484,6 +1506,29 @@ private fun CommunityScreen(onBack: () -> Unit) {
                 ) {
                     Row(Modifier.padding(13.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.PlayArrow, contentDescription = null, tint = AppPrimary)
+                        Spacer(Modifier.width(8.dp))
+                        Text(topic.label, modifier = Modifier.weight(1f), fontSize = 12.sp)
+                        Icon(Icons.Default.ChevronRight, contentDescription = null)
+                    }
+                }
+            }
+            item { Text("Quest & Puzzle yang Bikin Struggle", fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 10.dp)) }
+            item {
+                Text(
+                    "Genshin nggak punya data quest resmi yang bisa ditarik otomatis, jadi ini nyari panduan terbaru langsung (bukan teks tetap yang bisa basi tiap patch).",
+                    fontSize = 10.sp,
+                    color = Color(0xFF8995B3)
+                )
+            }
+            items(QuestTopics) { topic ->
+                Card(
+                    modifier = Modifier.fillMaxWidth().clickable {
+                        openUrl("https://www.youtube.com/results?search_query=${Uri.encode(topic.query)}")
+                    },
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF141B2F))
+                ) {
+                    Row(Modifier.padding(13.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Map, contentDescription = null, tint = AppPrimary)
                         Spacer(Modifier.width(8.dp))
                         Text(topic.label, modifier = Modifier.weight(1f), fontSize = 12.sp)
                         Icon(Icons.Default.ChevronRight, contentDescription = null)
