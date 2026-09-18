@@ -448,7 +448,8 @@ private fun App(repository: DataRepository, store: Store) {
                             openCharacters = { tab = Tab.CHAR },
                             openWeapons = { tab = Tab.WEAPON },
                             openTeams = { tab = Tab.TEAM },
-                            openTools = { tab = Tab.TOOLS }
+                            openTools = { tab = Tab.TOOLS },
+                            onSelectCharacter = { selectedCharacter = it }
                         )
                         Tab.CHAR -> Characters(loadedDb, store) { selectedCharacter = it }
                         Tab.WEAPON -> Weapons(loadedDb) { selectedWeapon = it }
@@ -500,7 +501,8 @@ private fun Home(
     openCharacters: () -> Unit,
     openWeapons: () -> Unit,
     openTeams: () -> Unit,
-    openTools: () -> Unit
+    openTools: () -> Unit,
+    onSelectCharacter: (Character) -> Unit
 ) {
     val roster = store.get("roster")
     LazyColumn(
@@ -522,7 +524,7 @@ private fun Home(
         }
         item { Text("My Roster", fontSize = 18.sp, fontWeight = FontWeight.Bold) }
         items(db.characters.filter { roster.contains(it.id) }.take(10)) { character ->
-            Compact(character)
+            Compact(character) { onSelectCharacter(character) }
         }
         if (roster.isEmpty()) {
             item {
@@ -646,8 +648,11 @@ private fun QuickAction(
 }
 
 @Composable
-private fun Compact(character: Character) {
-    Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF11182B))) {
+private fun Compact(character: Character, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier.clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF11182B))
+    ) {
         Row(
             Modifier.padding(8.dp),
             verticalAlignment = Alignment.CenterVertically
