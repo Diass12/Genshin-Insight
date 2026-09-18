@@ -640,16 +640,13 @@ private fun Home(
                 QuickAction("Monster", Icons.Default.Whatshot, openMonsters, Modifier.weight(1f))
             }
         }
-        item { Text(localized("My Roster", "Roster Saya"), fontSize = 18.sp, fontWeight = FontWeight.Bold) }
-        items(db.characters.filter { roster.contains(it.id) }.take(10)) { character ->
-            Compact(character) { onSelectCharacter(character) }
-        }
-        if (roster.isEmpty()) {
-            item {
-                Text(
-                    "Belum ada karakter. Tambahkan dari Character Database.",
-                    color = Color(0xFF8995B3)
-                )
+        // "My Roster" section hidden alongside the Add to Roster button
+        // (see CharacterDetail) - showing a section that can never have
+        // content would just be more empty space, not less.
+        if (roster.isNotEmpty()) {
+            item { Text(localized("My Roster", "Roster Saya"), fontSize = 18.sp, fontWeight = FontWeight.Bold) }
+            items(db.characters.filter { roster.contains(it.id) }.take(10)) { character ->
+                Compact(character) { onSelectCharacter(character) }
             }
         }
     }
@@ -840,11 +837,6 @@ private fun Characters(db: DB, store: Store, onSelect: (Character) -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(5.dp),
             modifier = Modifier.horizontalScroll(rememberScrollState())
         ) {
-            FilterChip(
-                selected = mineOnly,
-                onClick = { mineOnly = !mineOnly },
-                label = { Text(localized("My Roster", "Roster Saya"), fontSize = 10.sp) }
-            )
             listOf("All", "5", "4").forEach { value ->
                 FilterChip(
                     selected = rarity == value,
@@ -994,6 +986,16 @@ private fun DetailScaffold(
                         Brush.linearGradient(listOf(accent.copy(alpha = 0.55f), Color(0xFF0A0F1F)))
                     )
                 )
+                // Placeholder letter sits underneath so the hero area is never
+                // a blank gradient when heroImage is null or fails to load
+                // (AsyncImage shows nothing on failure by default).
+                Text(
+                    title.take(1),
+                    fontSize = 96.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White.copy(alpha = 0.18f),
+                    modifier = Modifier.align(Alignment.Center)
+                )
                 if (heroImage != null) {
                     AsyncImage(
                         model = heroImage,
@@ -1103,6 +1105,19 @@ private fun CharacterDetail(character: Character, store: Store, close: () -> Uni
                             OpenUrlButton("📜 Lore Lengkap", character.fandomUrl)
                         }
                     }
+                    Spacer(Modifier.height(10.dp))
+                    RarityCard(character.rarity) {
+                        Text(localized("Profile", "Profil"), fontWeight = FontWeight.Bold, fontSize = 12.sp, color = accent)
+                        Spacer(Modifier.height(6.dp))
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            ProfileRow(localized("Region", "Region"), character.region)
+                            if (character.affiliation.isNotBlank()) ProfileRow(localized("Affiliation", "Afiliasi"), character.affiliation)
+                            if (character.substat.isNotBlank()) ProfileRow(localized("Ascension Stat", "Stat Ascension"), character.substat)
+                            if (character.birthday.isNotBlank()) ProfileRow(localized("Birthday", "Ulang Tahun"), character.birthday)
+                            if (character.cvEnglish.isNotBlank()) ProfileRow(localized("English VA", "VA Inggris"), character.cvEnglish)
+                            if (character.cvJapanese.isNotBlank()) ProfileRow(localized("Japanese VA", "VA Jepang"), character.cvJapanese)
+                        }
+                    }
                 }
                 "Talents" -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     CharacterDemoCard(character, accent)
@@ -1125,21 +1140,28 @@ private fun CharacterDetail(character: Character, store: Store, close: () -> Uni
                 }
             }
         }
-        Button(
-            onClick = {
-                inRoster = !inRoster
-                val values = store.get("roster").toMutableSet()
-                if (inRoster) values.add(character.id) else values.remove(character.id)
-                store.set("roster", values)
-            },
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = accent)
-        ) {
-            Text(
-                if (inRoster) localized("Remove from My Roster", "Hapus dari Roster") else localized("Add to My Roster", "Tambah ke Roster"),
-                color = Color(0xFF0C1120),
-                fontWeight = FontWeight.Bold
-            )
+        // Hidden per user request (2026-09) - unclear whether it visibly did
+        // anything when tapped. Kept, not deleted: Team Builder, Home's "My
+        // Roster" section, and the Character DB "My Roster" filter all read
+        // from this same roster set, so re-enabling this button later is all
+        // that's needed to feed them again.
+        if (false) {
+            Button(
+                onClick = {
+                    inRoster = !inRoster
+                    val values = store.get("roster").toMutableSet()
+                    if (inRoster) values.add(character.id) else values.remove(character.id)
+                    store.set("roster", values)
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = accent)
+            ) {
+                Text(
+                    if (inRoster) localized("Remove from My Roster", "Hapus dari Roster") else localized("Add to My Roster", "Tambah ke Roster"),
+                    color = Color(0xFF0C1120),
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
     }
 }
@@ -1301,6 +1323,14 @@ private fun InfoBlock(title: String, body: String) {
         if (body.isNotBlank()) {
             Text(body, fontSize = 11.sp, color = Color(0xFF9DA9C7))
         }
+    }
+}
+
+@Composable
+private fun ProfileRow(label: String, value: String) {
+    Row(Modifier.fillMaxWidth()) {
+        Text(label, fontSize = 11.sp, color = Color(0xFF77839F), modifier = Modifier.weight(1f))
+        Text(value, fontSize = 11.sp, color = Color(0xFFE7E9F5), fontWeight = FontWeight.Medium)
     }
 }
 
