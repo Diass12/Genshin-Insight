@@ -78,7 +78,6 @@ private fun sectionLabel(key: String): String = when (key) {
     "Talents" -> localized("Talents", "Talent")
     "Constellations" -> localized("Constellations", "Constellation")
     "Level Up" -> localized("Level Up", "Naik Level")
-    "Build" -> localized("Build", "Build")
     else -> key
 }
 
@@ -191,12 +190,6 @@ private class Store(context: Context) {
     }
 
     fun get(key: String): Set<String> = prefs.getStringSet(key, emptySet()) ?: emptySet()
-
-    fun note(id: String): String = prefs.getString("note_$id", "") ?: ""
-
-    fun note(id: String, value: String) {
-        prefs.edit().putString("note_$id", value).apply()
-    }
 
     fun saveTeam(value: List<String>) {
         prefs.edit().putString("team", value.joinToString("|")) .apply()
@@ -1050,7 +1043,6 @@ private fun CharacterDetail(character: Character, store: Store, close: () -> Uni
     var section by remember { mutableStateOf("Overview") }
     var inRoster by remember { mutableStateOf(store.get("roster").contains(character.id)) }
     var favorite by remember { mutableStateOf(store.get("fav").contains(character.id)) }
-    var note by remember { mutableStateOf(store.note(character.id)) }
     val accent = elementColor(character.element)
 
     DetailScaffold(
@@ -1081,7 +1073,7 @@ private fun CharacterDetail(character: Character, store: Store, close: () -> Uni
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             modifier = Modifier.horizontalScroll(rememberScrollState())
         ) {
-            listOf("Overview", "Talents", "Constellations", "Level Up", "Build").forEach { value ->
+            listOf("Overview", "Talents", "Constellations", "Level Up").forEach { value ->
                 FilterChip(
                     selected = section == value,
                     onClick = { section = value },
@@ -1130,24 +1122,6 @@ private fun CharacterDetail(character: Character, store: Store, close: () -> Uni
                 }
                 "Level Up" -> Column {
                     LevelUpCalculator(character.ascensionCosts, accent)
-                }
-                "Build" -> Column {
-                    Text(localized("Build Workspace", "Ruang Kerja Build"), fontWeight = FontWeight.Bold)
-                    Text(
-                        "Weapon / Artifact / Main Stat / Sub Stat / Rotation",
-                        fontSize = 11.sp,
-                        color = Color(0xFF9DA9C7)
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    OutlinedTextField(
-                        value = note,
-                        onValueChange = {
-                            note = it
-                            store.note(character.id, it)
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text(localized("Build notes", "Catatan build")) }
-                    )
                 }
             }
         }
