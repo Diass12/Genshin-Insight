@@ -1092,10 +1092,11 @@ private fun CharacterDetail(character: Character, store: Store, close: () -> Uni
                         }
                     }
                 }
-                "Talents" -> if (character.talents.isEmpty() && character.passives.isEmpty()) {
-                    Missing("Normal Attack", "Elemental Skill", "Elemental Burst", "Passive 1–4")
-                } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                "Talents" -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    CharacterDemoCard(character, accent)
+                    if (character.talents.isEmpty() && character.passives.isEmpty()) {
+                        Missing("Normal Attack", "Elemental Skill", "Elemental Burst", "Passive 1–4")
+                    } else {
                         character.talents.forEach { InfoBlock(it.name, localized(it.description, it.descriptionId)) }
                         character.passives.forEach { InfoBlock(it.name, localized(it.description, it.descriptionId)) }
                     }
@@ -1156,6 +1157,71 @@ private fun RarityCard(rarity: Int, content: @Composable ColumnScope.() -> Unit)
         colors = CardDefaults.cardColors(containerColor = Color(0xFF141B2F))
     ) {
         Column(Modifier.padding(14.dp), content = content)
+    }
+}
+
+/**
+ * Video-thumbnail-style card that opens the character's official "Character
+ * Demo" trailer (talents/skills shown in action) on YouTube. HoYoWiki's own
+ * "Video Collection" section confirms every character has one titled exactly
+ * `New Character Demo - "..." | Genshin Impact`, but genshin-db doesn't carry
+ * video IDs and there's no key we have access to for the YouTube Data API to
+ * resolve the exact video - so this opens a tightly-scoped search instead of
+ * embedding playback directly, which would need either.
+ */
+@Composable
+private fun CharacterDemoCard(character: Character, accent: Color) {
+    val context = LocalContext.current
+    val thumbnail = character.splash ?: character.card ?: character.icon
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(150.dp)
+            .clickable {
+                val query = "\"New Character Demo\" ${character.name} Genshin Impact"
+                runCatching {
+                    context.startActivity(
+                        Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=${Uri.encode(query)}"))
+                    )
+                }
+            },
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF141B2F))
+    ) {
+        Box(Modifier.fillMaxSize()) {
+            if (thumbnail != null) {
+                AsyncImage(
+                    model = thumbnail,
+                    contentDescription = character.name,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
+            Box(
+                Modifier.fillMaxSize().background(
+                    Brush.verticalGradient(listOf(Color(0x33000000), Color(0xCC0A0F1F)))
+                )
+            )
+            Box(
+                Modifier.align(Alignment.Center).size(52.dp).clip(CircleShape)
+                    .background(accent.copy(alpha = 0.9f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.PlayArrow, contentDescription = "Play", tint = Color(0xFF0C1120), modifier = Modifier.size(28.dp))
+            }
+            Column(Modifier.align(Alignment.BottomStart).padding(10.dp)) {
+                Text(
+                    localized("New Character Demo", "Video Demo Karakter"),
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
+                )
+                Text(
+                    localized("Watch skills in action on YouTube", "Lihat skill beraksi di YouTube"),
+                    color = Color(0xFFB6C1DA),
+                    fontSize = 10.sp
+                )
+            }
+        }
     }
 }
 
