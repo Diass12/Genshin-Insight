@@ -48,10 +48,18 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private data class TalentInfo(val name: String, val description: String)
-private data class ConstellationInfo(val level: String, val name: String, val description: String)
-private data class RefinementInfo(val refinement: String, val description: String)
+private data class TalentInfo(val name: String, val description: String, val descriptionId: String = "")
+private data class ConstellationInfo(val level: String, val name: String, val description: String, val descriptionId: String = "")
+private data class RefinementInfo(val refinement: String, val description: String, val descriptionId: String = "")
 private data class AscendCost(val name: String, val count: Int, val icon: String?)
+
+/** en/id current language currently selected by the user (default: id). */
+private val LocalLang = compositionLocalOf { "id" }
+
+/** Picks the Indonesian variant when available and the app is set to id, else falls back to English. */
+@Composable
+private fun localized(en: String, id: String): String =
+    if (LocalLang.current == "id" && id.isNotBlank()) id else en
 
 // Ascension breakpoints are fixed game mechanics (level cap goes 20/40/50/
 // 60/70/80/90 for every character and weapon since launch), not something
@@ -67,6 +75,7 @@ private data class Character(
     val name: String,
     val title: String,
     val description: String,
+    val descriptionId: String,
     val rarity: Int,
     val element: String,
     val weapon: String,
@@ -90,6 +99,7 @@ private data class Weapon(
     val type: String,
     val rarity: Int,
     val description: String,
+    val descriptionId: String,
     val baseAtk: Double?,
     val mainStat: String,
     val mainStatValue: String,
@@ -104,7 +114,9 @@ private data class Artifact(
     val name: String,
     val rarity: Int,
     val effect2Pc: String,
+    val effect2PcId: String,
     val effect4Pc: String,
+    val effect4PcId: String,
     val pieces: List<ArtifactPiece>
 )
 
@@ -115,6 +127,7 @@ private data class Enemy(
     val element: String,
     val region: String,
     val description: String,
+    val descriptionId: String,
     val drops: List<String>,
     val icon: String?
 )
@@ -128,6 +141,7 @@ private data class Domain(
     val region: String,
     val entrance: String,
     val description: String,
+    val descriptionId: String,
     val recommendedLevel: Int?,
     val recommendedElements: List<String>,
     val monsters: List<String>,
@@ -135,9 +149,18 @@ private data class Domain(
 )
 private data class Wallpaper(val title: String, val category: String, val url: String)
 
-private enum class Tab(val label: String) {
-    HOME("Home"), CHAR("Char"), WEAPON("Weapon"), ARTIFACT("Artifact"), TEAM("Team"), TOOLS("Tools"), MORE("More")
+private enum class Tab(val labelEn: String, val labelId: String) {
+    HOME("Home", "Beranda"),
+    CHAR("Char", "Char"),
+    WEAPON("Weapon", "Senjata"),
+    ARTIFACT("Artifact", "Artifact"),
+    TEAM("Team", "Tim"),
+    TOOLS("Tools", "Tools"),
+    MORE("More", "Lainnya")
 }
+
+@Composable
+private fun Tab.label(): String = localized(labelEn, labelId)
 
 private class Store(context: Context) {
     private val prefs = context.getSharedPreferences("gc_store", Context.MODE_PRIVATE)
@@ -162,6 +185,12 @@ private class Store(context: Context) {
         ?.split("|")
         ?.filter(String::isNotBlank)
         ?: emptyList()
+
+    fun lang(): String = prefs.getString("lang", "id") ?: "id"
+
+    fun setLang(value: String) {
+        prefs.edit().putString("lang", value).apply()
+    }
 }
 
 private data class DB(
@@ -206,21 +235,21 @@ private data class DB(
                     val t = item.optJSONArray("talents") ?: JSONArray()
                     for (j in 0 until t.length()) {
                         val o = t.getJSONObject(j)
-                        add(TalentInfo(o.optString("name"), o.optString("description")))
+                        add(TalentInfo(o.optString("name"), o.optString("description"), o.optString("descriptionId")))
                     }
                 }
                 val passives = buildList {
                     val t = item.optJSONArray("passives") ?: JSONArray()
                     for (j in 0 until t.length()) {
                         val o = t.getJSONObject(j)
-                        add(TalentInfo(o.optString("name"), o.optString("description")))
+                        add(TalentInfo(o.optString("name"), o.optString("description"), o.optString("descriptionId")))
                     }
                 }
                 val constellations = buildList {
                     val t = item.optJSONArray("constellations") ?: JSONArray()
                     for (j in 0 until t.length()) {
                         val o = t.getJSONObject(j)
-                        add(ConstellationInfo(o.optString("level"), o.optString("name"), o.optString("description")))
+                        add(ConstellationInfo(o.optString("level"), o.optString("name"), o.optString("description"), o.optString("descriptionId")))
                     }
                 }
                 add(
@@ -229,6 +258,7 @@ private data class DB(
                         name = item.optString("name"),
                         title = item.optString("title"),
                         description = item.optString("description"),
+                        descriptionId = item.optString("descriptionId"),
                         rarity = item.optInt("rarity"),
                         element = item.optString("element"),
                         weapon = item.optString("weapon"),
@@ -259,7 +289,7 @@ private data class DB(
                     val r = item.optJSONArray("refinements") ?: JSONArray()
                     for (j in 0 until r.length()) {
                         val o = r.getJSONObject(j)
-                        add(RefinementInfo(o.optString("refinement"), o.optString("description")))
+                        add(RefinementInfo(o.optString("refinement"), o.optString("description"), o.optString("descriptionId")))
                     }
                 }
                 add(
@@ -269,6 +299,7 @@ private data class DB(
                         type = item.optString("type"),
                         rarity = item.optInt("rarity"),
                         description = item.optString("description"),
+                        descriptionId = item.optString("descriptionId"),
                         baseAtk = if (item.has("baseAtk") && !item.isNull("baseAtk")) item.optDouble("baseAtk") else null,
                         mainStat = item.optString("mainStat"),
                         mainStatValue = item.optString("mainStatValue"),
@@ -304,7 +335,9 @@ private data class DB(
                         name = item.optString("name"),
                         rarity = item.optInt("rarity", 5),
                         effect2Pc = item.optString("effect2Pc"),
+                        effect2PcId = item.optString("effect2PcId"),
                         effect4Pc = item.optString("effect4Pc"),
+                        effect4PcId = item.optString("effect4PcId"),
                         pieces = pieces
                     )
                 )
@@ -322,6 +355,7 @@ private data class DB(
                         element = item.optString("element", "None"),
                         region = item.optString("region", "Teyvat"),
                         description = item.optString("description"),
+                        descriptionId = item.optString("descriptionId"),
                         drops = stringList(item, "drops"),
                         icon = item.optString("icon").ifBlank { null }
                     )
@@ -349,6 +383,7 @@ private data class DB(
                         region = item.optString("region", "Teyvat"),
                         entrance = item.optString("entrance"),
                         description = item.optString("description"),
+                        descriptionId = item.optString("descriptionId"),
                         recommendedLevel = if (item.has("recommendedLevel") && !item.isNull("recommendedLevel")) item.optInt("recommendedLevel") else null,
                         recommendedElements = stringList(item, "recommendedElements"),
                         monsters = stringList(item, "monsters"),
@@ -430,7 +465,9 @@ private fun App(repository: DataRepository, store: Store) {
     var selectedArtifact by remember { mutableStateOf<Artifact?>(null) }
     var selectedEnemy by remember { mutableStateOf<Enemy?>(null) }
     var refresh by remember { mutableIntStateOf(0) }
+    var lang by remember { mutableStateOf(store.lang()) }
 
+    CompositionLocalProvider(LocalLang provides lang) {
     MaterialTheme(
         colorScheme = darkColorScheme(
             background = AppBackground,
@@ -464,7 +501,7 @@ private fun App(repository: DataRepository, store: Store) {
                                 selected = tab == currentTab,
                                 onClick = { tab = currentTab },
                                 icon = { TabIcon(currentTab) },
-                                label = { Text(currentTab.label, fontSize = 9.sp) }
+                                label = { Text(currentTab.label(), fontSize = 9.sp) }
                             )
                         }
                     }
@@ -495,12 +532,18 @@ private fun App(repository: DataRepository, store: Store) {
                             store = store,
                             repository = repository,
                             openEnemy = { selectedEnemy = it },
-                            onChange = { refresh++ }
+                            onChange = { refresh++ },
+                            lang = lang,
+                            onLangChange = {
+                                lang = it
+                                store.setLang(it)
+                            }
                         )
                     }
                 }
             }
         }
+    }
     }
 }
 
@@ -515,7 +558,7 @@ private fun TabIcon(tab: Tab) {
         Tab.TOOLS -> Icons.Default.Calculate
         Tab.MORE -> Icons.Default.MoreHoriz
     }
-    Icon(icon, contentDescription = tab.label)
+    Icon(icon, contentDescription = tab.label())
 }
 
 @Composable
@@ -731,13 +774,13 @@ private fun Characters(db: DB, store: Store, onSelect: (Character) -> Unit) {
     val roster = store.get("roster")
 
     Column(Modifier.fillMaxSize().padding(horizontal = 13.dp)) {
-        Header("Character Database", "Search · filter · roster · favorites")
+        Header(localized("Character Database", "Database Karakter"), localized("Search · filter · roster · favorites", "Cari · filter · roster · favorit"))
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            label = { Text("Search character") },
+            label = { Text(localized("Search character", "Cari karakter")) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) }
         )
         Row(
@@ -996,7 +1039,7 @@ private fun CharacterDetail(character: Character, store: Store, close: () -> Uni
                 "Overview" -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     if (character.title.isNotBlank()) Text("\"${character.title}\"", color = Color(0xFFB9C4F7), fontWeight = FontWeight.SemiBold)
                     if (character.description.isNotBlank()) {
-                        Text(character.description, fontSize = 12.sp, color = Color(0xFFB6C1DA))
+                        Text(localized(character.description, character.descriptionId), fontSize = 12.sp, color = Color(0xFFB6C1DA))
                     }
                     Spacer(Modifier.height(6.dp))
                     Row(
@@ -1017,15 +1060,15 @@ private fun CharacterDetail(character: Character, store: Store, close: () -> Uni
                     Missing("Normal Attack", "Elemental Skill", "Elemental Burst", "Passive 1–4")
                 } else {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        character.talents.forEach { InfoBlock(it.name, it.description) }
-                        character.passives.forEach { InfoBlock(it.name, it.description) }
+                        character.talents.forEach { InfoBlock(it.name, localized(it.description, it.descriptionId)) }
+                        character.passives.forEach { InfoBlock(it.name, localized(it.description, it.descriptionId)) }
                     }
                 }
                 "Constellations" -> if (character.constellations.isEmpty()) {
                     Missing("Constellation C1–C6")
                 } else {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        character.constellations.forEach { InfoBlock("${it.level.uppercase()} · ${it.name}", it.description) }
+                        character.constellations.forEach { InfoBlock("${it.level.uppercase()} · ${it.name}", localized(it.description, it.descriptionId)) }
                     }
                 }
                 "Level Up" -> Column {
@@ -1046,7 +1089,7 @@ private fun CharacterDetail(character: Character, store: Store, close: () -> Uni
                             store.note(character.id, it)
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Build notes") }
+                        label = { Text(localized("Build notes", "Catatan build")) }
                     )
                 }
             }
@@ -1061,7 +1104,11 @@ private fun CharacterDetail(character: Character, store: Store, close: () -> Uni
             modifier = Modifier.fillMaxWidth(),
             colors = ButtonDefaults.buttonColors(containerColor = accent)
         ) {
-            Text(if (inRoster) "Remove from My Roster" else "Add to My Roster", color = Color(0xFF0C1120), fontWeight = FontWeight.Bold)
+            Text(
+                if (inRoster) localized("Remove from My Roster", "Hapus dari Roster") else localized("Add to My Roster", "Tambah ke Roster"),
+                color = Color(0xFF0C1120),
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }
@@ -1181,13 +1228,13 @@ private fun Weapons(db: DB, onSelect: (Weapon) -> Unit) {
     var rarity by remember { mutableStateOf("All") }
 
     Column(Modifier.fillMaxSize().padding(horizontal = 13.dp)) {
-        Header("Weapon Database", "Search · class · rarity")
+        Header(localized("Weapon Database", "Database Senjata"), localized("Search · class · rarity", "Cari · tipe · rarity"))
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            label = { Text("Search weapon") }
+            label = { Text(localized("Search weapon", "Cari senjata")) }
         )
         Row(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -1264,7 +1311,7 @@ private fun WeaponDetail(weapon: Weapon, close: () -> Unit) {
             }
             if (weapon.description.isNotBlank()) {
                 Spacer(Modifier.height(6.dp))
-                Text(weapon.description, fontSize = 12.sp, color = Color(0xFFB6C1DA))
+                Text(localized(weapon.description, weapon.descriptionId), fontSize = 12.sp, color = Color(0xFFB6C1DA))
             }
         }
         RarityCard(weapon.rarity) {
@@ -1276,7 +1323,7 @@ private fun WeaponDetail(weapon: Weapon, close: () -> Unit) {
                 Missing("Passive", "Refinement R1–R5")
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    weapon.refinements.forEach { InfoBlock(it.refinement, it.description) }
+                    weapon.refinements.forEach { InfoBlock(it.refinement, localized(it.description, it.descriptionId)) }
                 }
             }
         }
@@ -1292,13 +1339,13 @@ private fun WeaponDetail(weapon: Weapon, close: () -> Unit) {
 private fun Artifacts(db: DB, onSelect: (Artifact) -> Unit) {
     var query by remember { mutableStateOf("") }
     Column(Modifier.fillMaxSize().padding(horizontal = 13.dp)) {
-        Header("Artifact Database", "Set effects · searchable")
+        Header(localized("Artifact Database", "Database Artifact"), localized("Set effects · searchable", "Efek set · bisa dicari"))
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            label = { Text("Search artifact set") },
+            label = { Text(localized("Search artifact set", "Cari set artifact")) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) }
         )
         Spacer(Modifier.height(8.dp))
@@ -1329,7 +1376,7 @@ private fun Artifacts(db: DB, onSelect: (Artifact) -> Unit) {
                         }
                         Column(Modifier.weight(1f)) {
                             Text(artifact.name, fontWeight = FontWeight.Bold)
-                            val summary = if (artifact.effect2Pc.isNotBlank()) artifact.effect2Pc else artifact.effect4Pc
+                            val summary = if (artifact.effect2Pc.isNotBlank()) localized(artifact.effect2Pc, artifact.effect2PcId) else localized(artifact.effect4Pc, artifact.effect4PcId)
                             Text(summary, fontSize = 11.sp, color = Color(0xFF9DA9C7), maxLines = 2)
                         }
                     }
@@ -1352,12 +1399,12 @@ private fun ArtifactDetail(artifact: Artifact, close: () -> Unit) {
         RarityCard(artifact.rarity) {
             if (artifact.effect2Pc.isNotBlank()) {
                 Text("2-Piece", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = accent)
-                Text(artifact.effect2Pc, fontSize = 12.sp, color = Color(0xFFB6C1DA))
+                Text(localized(artifact.effect2Pc, artifact.effect2PcId), fontSize = 12.sp, color = Color(0xFFB6C1DA))
                 Spacer(Modifier.height(8.dp))
             }
             if (artifact.effect4Pc.isNotBlank()) {
                 Text("4-Piece", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = accent)
-                Text(artifact.effect4Pc, fontSize = 12.sp, color = Color(0xFFB6C1DA))
+                Text(localized(artifact.effect4Pc, artifact.effect4PcId), fontSize = 12.sp, color = Color(0xFFB6C1DA))
             }
         }
         if (artifact.pieces.isNotEmpty()) {
@@ -1401,14 +1448,14 @@ private fun Teams(db: DB, store: Store, refresh: Int) {
         Modifier.fillMaxSize().padding(14.dp),
         contentPadding = PaddingValues(bottom = 24.dp)
     ) {
-        item { Header("Team Builder", "4 slots · roster only") }
+        item { Header(localized("Team Builder", "Penyusun Tim"), localized("4 slots · roster only", "4 slot · dari roster kamu")) }
         item {
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                label = { Text("Search roster") }
+                label = { Text(localized("Search roster", "Cari roster")) }
             )
         }
         item {
@@ -1436,11 +1483,11 @@ private fun Teams(db: DB, store: Store, refresh: Int) {
                 Button(
                     onClick = { store.saveTeam(slots.filter(String::isNotBlank)) },
                     modifier = Modifier.weight(1f)
-                ) { Text("Save") }
+                ) { Text(localized("Save", "Simpan")) }
                 OutlinedButton(
                     onClick = { slots = List(4) { "" } },
                     modifier = Modifier.weight(1f)
-                ) { Text("Clear") }
+                ) { Text(localized("Clear", "Reset")) }
             }
         }
         item {
@@ -1535,7 +1582,7 @@ private fun Tools() {
         Modifier.fillMaxSize().padding(14.dp),
         contentPadding = PaddingValues(bottom = 24.dp)
     ) {
-        item { Header("Tools", "Damage · material · enhancement") }
+        item { Header(localized("Tools", "Kalkulator"), localized("Damage · material · enhancement", "Damage · material · upgrade")) }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF141B2F))) {
                 Column(
@@ -1563,7 +1610,7 @@ private fun Tools() {
                         val reactionMultiplier = reaction.toDoubleOrNull() ?: 1.0
                         val damage = a * m * (1 + b) * (1 + c) * resistanceMultiplier * reactionMultiplier
                         result = String.format(Locale.US, "%,.0f", damage)
-                    }) { Text("Calculate") }
+                    }) { Text(localized("Calculate", "Hitung")) }
                     Text(result, fontSize = 29.sp, fontWeight = FontWeight.Bold)
                     Text(
                         "Basic model; defense/buffs/ICD/reaction-specific formulas will be data-driven in the engine layer.",
@@ -1639,7 +1686,7 @@ private fun EnemiesScreen(db: DB, onBack: () -> Unit, onSelect: (Enemy) -> Unit)
             onValueChange = { query = it },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            label = { Text("Search monster/boss") }
+            label = { Text(localized("Search monster/boss", "Cari monster/boss")) }
         )
         Spacer(Modifier.height(6.dp))
         LazyColumn(Modifier.fillMaxSize().padding(top = 4.dp)) {
@@ -1695,7 +1742,7 @@ private fun EnemyDetail(enemy: Enemy, close: () -> Unit) {
     ) {
         RarityCard(0) {
             if (enemy.description.isNotBlank()) {
-                Text(enemy.description, fontSize = 12.sp, color = Color(0xFFB6C1DA))
+                Text(localized(enemy.description, enemy.descriptionId), fontSize = 12.sp, color = Color(0xFFB6C1DA))
             }
             if (enemy.drops.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))
@@ -1743,7 +1790,7 @@ private fun DomainsScreen(db: DB, onBack: () -> Unit) {
             onValueChange = { query = it },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            label = { Text("Search domain") }
+            label = { Text(localized("Search domain", "Cari domain")) }
         )
         Spacer(Modifier.height(6.dp))
         Row(
@@ -1784,7 +1831,7 @@ private fun DomainsScreen(db: DB, onBack: () -> Unit) {
                         if (expanded == domain.id) {
                             Spacer(Modifier.height(6.dp))
                             if (domain.description.isNotBlank()) {
-                                Text(domain.description, fontSize = 11.sp, color = Color(0xFF9DA9C7))
+                                Text(localized(domain.description, domain.descriptionId), fontSize = 11.sp, color = Color(0xFF9DA9C7))
                                 Spacer(Modifier.height(4.dp))
                             }
                             if (domain.monsters.isNotEmpty()) {
@@ -2051,7 +2098,9 @@ private fun More(
     store: Store,
     repository: DataRepository,
     openEnemy: (Enemy) -> Unit,
-    onChange: () -> Unit
+    onChange: () -> Unit,
+    lang: String,
+    onLangChange: (String) -> Unit
 ) {
     var message by remember { mutableStateOf("") }
     var screen by remember { mutableStateOf("main") }
@@ -2068,7 +2117,7 @@ private fun More(
         Modifier.fillMaxSize().padding(14.dp),
         contentPadding = PaddingValues(bottom = 24.dp)
     ) {
-        item { Header("More", "V6 · database · storage · updates") }
+        item { Header(localized("More", "Lainnya"), localized("V6 · database · storage · updates", "V6 · database · penyimpanan · update")) }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF141B2F))) {
                 Column(
@@ -2079,6 +2128,31 @@ private fun More(
                     Text("${db.characters.size} characters · ${db.weapons.size} weapons · ${db.artifacts.size} artifacts · ${db.enemies.size} enemies")
                     Text("Roster ${store.get("roster").size} · Favorites ${store.get("fav").size}")
                     Text("Sumber data: ${repository.lastStatus.source}" + (repository.lastStatus.generatedAt?.let { " · diambil $it" } ?: ""), fontSize = 10.sp, color = Color(0xFF8995B3))
+                }
+            }
+        }
+        item {
+            Spacer(Modifier.height(12.dp))
+            Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF141B2F))) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Bahasa / Language", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Ganti bahasa deskripsi karakter, senjata, artifact, dan musuh.",
+                        fontSize = 10.sp,
+                        color = Color(0xFF9DA9C7)
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        FilterChip(
+                            selected = lang == "id",
+                            onClick = { onLangChange("id") },
+                            label = { Text("Bahasa Indonesia") }
+                        )
+                        FilterChip(
+                            selected = lang == "en",
+                            onClick = { onLangChange("en") },
+                            label = { Text("English") }
+                        )
+                    }
                 }
             }
         }
