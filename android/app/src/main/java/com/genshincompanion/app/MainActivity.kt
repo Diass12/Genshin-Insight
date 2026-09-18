@@ -175,8 +175,8 @@ private enum class Tab(val labelEn: String, val labelId: String) {
     CHAR("Char", "Char"),
     WEAPON("Weapon", "Senjata"),
     ARTIFACT("Artifact", "Artifact"),
-    TEAM("Team", "Tim"),
-    TOOLS("Tools", "Tools"),
+    COMMUNITY("Community", "Community"),
+    MONSTER("Monster", "Monster"),
     MORE("More", "Lainnya")
 }
 
@@ -554,20 +554,19 @@ private fun App(repository: DataRepository, store: Store) {
                             store = store,
                             openCharacters = { tab = Tab.CHAR },
                             openWeapons = { tab = Tab.WEAPON },
-                            openTeams = { tab = Tab.TEAM },
-                            openTools = { tab = Tab.TOOLS },
+                            openCommunity = { tab = Tab.COMMUNITY },
+                            openMonsters = { tab = Tab.MONSTER },
                             onSelectCharacter = { selectedCharacter = it }
                         )
                         Tab.CHAR -> Characters(loadedDb, store) { selectedCharacter = it }
                         Tab.WEAPON -> Weapons(loadedDb) { selectedWeapon = it }
                         Tab.ARTIFACT -> Artifacts(loadedDb) { selectedArtifact = it }
-                        Tab.TEAM -> Teams(loadedDb, store, refresh)
-                        Tab.TOOLS -> Tools()
+                        Tab.COMMUNITY -> CommunityScreen()
+                        Tab.MONSTER -> EnemiesScreen(loadedDb, onSelect = { selectedEnemy = it })
                         Tab.MORE -> More(
                             db = loadedDb,
                             store = store,
                             repository = repository,
-                            openEnemy = { selectedEnemy = it },
                             onChange = { refresh++ },
                             lang = lang,
                             onLangChange = {
@@ -590,8 +589,8 @@ private fun TabIcon(tab: Tab) {
         Tab.CHAR -> Icons.Default.Person
         Tab.WEAPON -> Icons.Default.Build
         Tab.ARTIFACT -> Icons.Default.AutoAwesome
-        Tab.TEAM -> Icons.Default.Group
-        Tab.TOOLS -> Icons.Default.Calculate
+        Tab.COMMUNITY -> Icons.Default.Groups
+        Tab.MONSTER -> Icons.Default.Whatshot
         Tab.MORE -> Icons.Default.MoreHoriz
     }
     Icon(icon, contentDescription = tab.label())
@@ -613,8 +612,8 @@ private fun Home(
     store: Store,
     openCharacters: () -> Unit,
     openWeapons: () -> Unit,
-    openTeams: () -> Unit,
-    openTools: () -> Unit,
+    openCommunity: () -> Unit,
+    openMonsters: () -> Unit,
     onSelectCharacter: (Character) -> Unit
 ) {
     val roster = store.get("roster")
@@ -631,8 +630,8 @@ private fun Home(
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 QuickAction("Character", Icons.Default.Person, openCharacters, Modifier.weight(1f))
                 QuickAction("Weapon", Icons.Default.Build, openWeapons, Modifier.weight(1f))
-                QuickAction("Team", Icons.Default.Group, openTeams, Modifier.weight(1f))
-                QuickAction("Calc", Icons.Default.Calculate, openTools, Modifier.weight(1f))
+                QuickAction("Community", Icons.Default.Groups, openCommunity, Modifier.weight(1f))
+                QuickAction("Monster", Icons.Default.Whatshot, openMonsters, Modifier.weight(1f))
             }
         }
         item { Text(localized("My Roster", "Roster Saya"), fontSize = 18.sp, fontWeight = FontWeight.Bold) }
@@ -1776,7 +1775,7 @@ private fun Num(label: String, value: String, onValueChange: (String) -> Unit) {
 }
 
 @Composable
-private fun EnemiesScreen(db: DB, onBack: () -> Unit, onSelect: (Enemy) -> Unit) {
+private fun EnemiesScreen(db: DB, onBack: (() -> Unit)? = null, onSelect: (Enemy) -> Unit) {
     var query by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("All") }
     val categories = listOf("All") + db.enemies.map { it.category }.distinct()
@@ -1786,8 +1785,10 @@ private fun EnemiesScreen(db: DB, onBack: () -> Unit, onSelect: (Enemy) -> Unit)
     }
     Column(Modifier.fillMaxSize().padding(horizontal = 13.dp)) {
         Row(Modifier.padding(top = 14.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") }
-            Column { Text("Monster & Boss Database", fontSize = 20.sp, fontWeight = FontWeight.Bold); Text("${db.enemies.size} entri · normal, elite, boss, weekly boss", fontSize = 10.sp, color = Color(0xFF9DA9C7)) }
+            if (onBack != null) {
+                IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") }
+            }
+            Column { Text(localized("Monster & Boss Database", "Database Monster & Boss"), fontSize = 20.sp, fontWeight = FontWeight.Bold); Text(localized("${db.enemies.size} entries · normal, elite, boss, weekly boss", "${db.enemies.size} entri · normal, elite, boss, weekly boss"), fontSize = 10.sp, color = Color(0xFF9DA9C7)) }
         }
         OutlinedTextField(
             value = query,
@@ -1978,12 +1979,23 @@ private fun SplashScreen(error: Boolean = false) {
             Text("~Dias~", fontSize = 18.sp, color = AppSecondary, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(8.dp))
             if (error) {
-                Text("Gagal memuat data, memakai data bundled...", fontSize = 10.sp, color = Color(0xFFE8A67B))
+                Text(localized("Failed to load data, using bundled data...", "Gagal memuat data, memakai data bundled..."), fontSize = 10.sp, color = Color(0xFFE8A67B))
             } else {
                 CircularProgressIndicator(color = AppPrimary, modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
                 Spacer(Modifier.height(8.dp))
-                Text("Menyiapkan data terbaru…", fontSize = 10.sp, color = Color(0xFF8995B3))
+                Text(localized("Preparing latest data…", "Menyiapkan data terbaru…"), fontSize = 10.sp, color = Color(0xFF8995B3))
             }
+            Spacer(Modifier.height(18.dp))
+            Text(
+                localized(
+                    "Non-commercial fan project for personal use only. Not affiliated with or endorsed by HoYoverse.",
+                    "Fan project non-komersial, hanya untuk penggunaan pribadi. Tidak diperjualbelikan dan tidak berafiliasi dengan HoYoverse."
+                ),
+                fontSize = 8.5.sp,
+                color = Color(0xFF5C6584),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 32.dp)
+            )
         }
     }
 }
@@ -2081,15 +2093,17 @@ private val QuestTopics = listOf(
 )
 
 @Composable
-private fun CommunityScreen(onBack: () -> Unit) {
+private fun CommunityScreen(onBack: (() -> Unit)? = null) {
     val context = LocalContext.current
     fun openUrl(url: String) {
         runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
     }
     Column(Modifier.fillMaxSize().padding(horizontal = 13.dp)) {
         Row(Modifier.padding(top = 14.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") }
-            Column { Text("Community & Guides", fontSize = 22.sp, fontWeight = FontWeight.Bold); Text("Creator, tips & sumber terpercaya", fontSize = 11.sp, color = AppSecondary) }
+            if (onBack != null) {
+                IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") }
+            }
+            Column { Text(localized("Community & Guides", "Community & Guides"), fontSize = 22.sp, fontWeight = FontWeight.Bold); Text(localized("Creators, tips & trusted sources", "Creator, tips & sumber terpercaya"), fontSize = 11.sp, color = AppSecondary) }
         }
         LazyColumn(contentPadding = PaddingValues(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item {
@@ -2205,7 +2219,6 @@ private fun More(
     db: DB,
     store: Store,
     repository: DataRepository,
-    openEnemy: (Enemy) -> Unit,
     onChange: () -> Unit,
     lang: String,
     onLangChange: (String) -> Unit
@@ -2218,9 +2231,25 @@ private fun More(
 
     when (screen) {
         "wallpaper" -> { WallpaperGallery(db) { screen = "main" }; return }
-        "community" -> { CommunityScreen { screen = "main" }; return }
-        "enemies" -> { EnemiesScreen(db, onBack = { screen = "main" }, onSelect = openEnemy); return }
         "domains" -> { DomainsScreen(db) { screen = "main" }; return }
+        "team" -> {
+            Column(Modifier.fillMaxSize()) {
+                IconButton(onClick = { screen = "main" }, modifier = Modifier.padding(4.dp)) {
+                    Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                }
+                Teams(db, store, 0)
+            }
+            return
+        }
+        "tools" -> {
+            Column(Modifier.fillMaxSize()) {
+                IconButton(onClick = { screen = "main" }, modifier = Modifier.padding(4.dp)) {
+                    Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                }
+                Tools()
+            }
+            return
+        }
     }
 
     LazyColumn(
@@ -2278,10 +2307,17 @@ private fun More(
         }
         item {
             FeatureRow(
-                localized("Monster & Boss Database", "Database Monster & Boss"),
-                localized("${db.enemies.size} enemies · description & drops", "${db.enemies.size} musuh · deskripsi & drop item"),
-                Icons.Default.Whatshot
-            ) { screen = "enemies" }
+                localized("Team Builder", "Penyusun Tim"),
+                localized("4 slots · saved locally · preset team ideas", "4 slot · tersimpan lokal · ide tim preset"),
+                Icons.Default.Group
+            ) { screen = "team" }
+        }
+        item {
+            FeatureRow(
+                localized("Tools", "Kalkulator"),
+                localized("Damage calculator · material planning", "Kalkulator damage · rencana material"),
+                Icons.Default.Calculate
+            ) { screen = "tools" }
         }
         item {
             FeatureRow(
@@ -2289,13 +2325,6 @@ private fun More(
                 localized("${db.domains.size} domains · official interactive map", "${db.domains.size} domain · peta interaktif resmi"),
                 Icons.Default.Map
             ) { screen = "domains" }
-        }
-        item {
-            FeatureRow(
-                localized("Community & Guides", "Community & Guides"),
-                localized("Creators, tips videos, KQM, wiki", "Creator, tips video, KQM, wiki"),
-                Icons.Default.Groups
-            ) { screen = "community" }
         }
         item {
             FeatureRow(
