@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.app.WallpaperManager
 import android.graphics.BitmapFactory
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -60,6 +61,26 @@ private val LocalLang = compositionLocalOf { "id" }
 @Composable
 private fun localized(en: String, id: String): String =
     if (LocalLang.current == "id" && id.isNotBlank()) id else en
+
+// Filter chip values like "All" are compared internally (e.g. `element ==
+// "All"`), so the underlying value stays fixed; this only translates the
+// displayed label. Element/weapon-type names (Pyro, Sword, ...) are left
+// as-is since even the official Indonesian localization keeps them in
+// English (confirmed against genshin-db's Indonesian output).
+@Composable
+private fun filterLabel(value: String): String = if (value == "All") localized("All", "Semua") else value
+
+// Section chip keys stay in English internally (used for state/`when`
+// matching); this only translates what's shown on the chip.
+@Composable
+private fun sectionLabel(key: String): String = when (key) {
+    "Overview" -> localized("Overview", "Ringkasan")
+    "Talents" -> localized("Talents", "Talent")
+    "Constellations" -> localized("Constellations", "Constellation")
+    "Level Up" -> localized("Level Up", "Naik Level")
+    "Build" -> localized("Build", "Build")
+    else -> key
+}
 
 // Ascension breakpoints are fixed game mechanics (level cap goes 20/40/50/
 // 60/70/80/90 for every character and weapon since launch), not something
@@ -453,12 +474,6 @@ private fun App(repository: DataRepository, store: Store) {
             .onFailure { loadError = true }
     }
 
-    val loadedDb = db
-    if (loadedDb == null) {
-        SplashScreen(error = loadError)
-        return
-    }
-
     var tab by remember { mutableStateOf(Tab.HOME) }
     var selectedCharacter by remember { mutableStateOf<Character?>(null) }
     var selectedWeapon by remember { mutableStateOf<Weapon?>(null) }
@@ -467,6 +482,11 @@ private fun App(repository: DataRepository, store: Store) {
     var refresh by remember { mutableIntStateOf(0) }
     var lang by remember { mutableStateOf(store.lang()) }
 
+    // Everything - including the loading splash - renders inside MaterialTheme.
+    // SplashScreen used to render before this wrapper existed, with no Surface
+    // ancestor to resolve a default text color, so its title text fell back to
+    // LocalContentColor's built-in black default and was invisible on the dark
+    // background - same root cause as the earlier DetailScaffold bug.
     CompositionLocalProvider(LocalLang provides lang) {
     MaterialTheme(
         colorScheme = darkColorScheme(
@@ -477,6 +497,11 @@ private fun App(repository: DataRepository, store: Store) {
             secondary = AppSecondary
         )
     ) {
+        val loadedDb = db
+        if (loadedDb == null) {
+            SplashScreen(error = loadError)
+            return@MaterialTheme
+        }
         // Detail pages render full-screen (replacing the whole Scaffold, bottom
         // nav included) instead of floating over it, so they read like a real
         // profile page rather than a popup.
@@ -484,6 +509,17 @@ private fun App(repository: DataRepository, store: Store) {
         val weapon = selectedWeapon
         val artifact = selectedArtifact
         val enemy = selectedEnemy
+        // Detail screens used to be AlertDialogs, which wire up the system
+        // back gesture/button for free. As full-screen composables they don't,
+        // so without this the back gesture falls through to the Activity and
+        // exits the whole app instead of just closing the detail page.
+        BackHandler(enabled = character != null || weapon != null || artifact != null || enemy != null) {
+            if (character != null) refresh++
+            selectedCharacter = null
+            selectedWeapon = null
+            selectedArtifact = null
+            selectedEnemy = null
+        }
         when {
             character != null -> CharacterDetail(character, store) {
                 selectedCharacter = null
@@ -590,7 +626,7 @@ private fun Home(
         item { Spacer(Modifier.height(6.dp)) }
         item { HomeHero(db, roster.size) }
         item { NewsAndBannerCard() }
-        item { Text("Quick Access", fontSize = 18.sp, fontWeight = FontWeight.Bold) }
+        item { Text(localized("Quick Access", "Akses Cepat"), fontSize = 18.sp, fontWeight = FontWeight.Bold) }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 QuickAction("Character", Icons.Default.Person, openCharacters, Modifier.weight(1f))
@@ -599,7 +635,7 @@ private fun Home(
                 QuickAction("Calc", Icons.Default.Calculate, openTools, Modifier.weight(1f))
             }
         }
-        item { Text("My Roster", fontSize = 18.sp, fontWeight = FontWeight.Bold) }
+        item { Text(localized("My Roster", "Roster Saya"), fontSize = 18.sp, fontWeight = FontWeight.Bold) }
         items(db.characters.filter { roster.contains(it.id) }.take(10)) { character ->
             Compact(character) { onSelectCharacter(character) }
         }
@@ -791,7 +827,7 @@ private fun Characters(db: DB, store: Store, onSelect: (Character) -> Unit) {
                 FilterChip(
                     selected = element == value,
                     onClick = { element = value },
-                    label = { Text(value, fontSize = 9.sp) }
+                    label = { Text(filterLabel(value), fontSize = 9.sp) }
                 )
             }
         }
@@ -802,13 +838,13 @@ private fun Characters(db: DB, store: Store, onSelect: (Character) -> Unit) {
             FilterChip(
                 selected = mineOnly,
                 onClick = { mineOnly = !mineOnly },
-                label = { Text("My Roster", fontSize = 10.sp) }
+                label = { Text(localized("My Roster", "Roster Saya"), fontSize = 10.sp) }
             )
             listOf("All", "5", "4").forEach { value ->
                 FilterChip(
                     selected = rarity == value,
                     onClick = { rarity = value },
-                    label = { Text("${value}★", fontSize = 10.sp) }
+                    label = { Text(if (value == "All") filterLabel(value) else "${value}★", fontSize = 10.sp) }
                 )
             }
         }
@@ -1029,7 +1065,7 @@ private fun CharacterDetail(character: Character, store: Store, close: () -> Uni
                 FilterChip(
                     selected = section == value,
                     onClick = { section = value },
-                    label = { Text(value, fontSize = 9.sp) },
+                    label = { Text(sectionLabel(value), fontSize = 9.sp) },
                     colors = FilterChipDefaults.filterChipColors(selectedContainerColor = accent.copy(alpha = 0.35f))
                 )
             }
@@ -1075,7 +1111,7 @@ private fun CharacterDetail(character: Character, store: Store, close: () -> Uni
                     LevelUpCalculator(character.ascensionCosts, accent)
                 }
                 "Build" -> Column {
-                    Text("Build Workspace", fontWeight = FontWeight.Bold)
+                    Text(localized("Build Workspace", "Ruang Kerja Build"), fontWeight = FontWeight.Bold)
                     Text(
                         "Weapon / Artifact / Main Stat / Sub Stat / Rotation",
                         fontSize = 11.sp,
@@ -1244,7 +1280,7 @@ private fun Weapons(db: DB, onSelect: (Weapon) -> Unit) {
                 FilterChip(
                     selected = type == value,
                     onClick = { type = value },
-                    label = { Text(value, fontSize = 9.sp) }
+                    label = { Text(filterLabel(value), fontSize = 9.sp) }
                 )
             }
         }
@@ -1256,7 +1292,7 @@ private fun Weapons(db: DB, onSelect: (Weapon) -> Unit) {
                 FilterChip(
                     selected = rarity == value,
                     onClick = { rarity = value },
-                    label = { Text("${value}★", fontSize = 9.sp) }
+                    label = { Text(if (value == "All") filterLabel(value) else "${value}★", fontSize = 9.sp) }
                 )
             }
         }
@@ -1307,7 +1343,7 @@ private fun WeaponDetail(weapon: Weapon, close: () -> Unit) {
     ) {
         RarityCard(weapon.rarity) {
             if (weapon.baseAtk != null) {
-                Text("Base ATK: ${weapon.baseAtk.toInt()} · ${weapon.mainStat} ${weapon.mainStatValue}", fontSize = 12.sp, color = Color(0xFFB6C1DA))
+                Text(localized("Base ATK", "ATK Dasar") + ": ${weapon.baseAtk.toInt()} · ${weapon.mainStat} ${weapon.mainStatValue}", fontSize = 12.sp, color = Color(0xFFB6C1DA))
             }
             if (weapon.description.isNotBlank()) {
                 Spacer(Modifier.height(6.dp))
@@ -1328,7 +1364,7 @@ private fun WeaponDetail(weapon: Weapon, close: () -> Unit) {
             }
         }
         RarityCard(weapon.rarity) {
-            Text("Level Up", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = accent)
+            Text(localized("Level Up", "Naik Level"), fontWeight = FontWeight.Bold, fontSize = 13.sp, color = accent)
             Spacer(Modifier.height(8.dp))
             LevelUpCalculator(weapon.ascensionCosts, accent)
         }
@@ -1398,18 +1434,18 @@ private fun ArtifactDetail(artifact: Artifact, close: () -> Unit) {
     ) {
         RarityCard(artifact.rarity) {
             if (artifact.effect2Pc.isNotBlank()) {
-                Text("2-Piece", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = accent)
+                Text(localized("2-Piece", "2-Bagian"), fontWeight = FontWeight.Bold, fontSize = 12.sp, color = accent)
                 Text(localized(artifact.effect2Pc, artifact.effect2PcId), fontSize = 12.sp, color = Color(0xFFB6C1DA))
                 Spacer(Modifier.height(8.dp))
             }
             if (artifact.effect4Pc.isNotBlank()) {
-                Text("4-Piece", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = accent)
+                Text(localized("4-Piece", "4-Bagian"), fontWeight = FontWeight.Bold, fontSize = 12.sp, color = accent)
                 Text(localized(artifact.effect4Pc, artifact.effect4PcId), fontSize = 12.sp, color = Color(0xFFB6C1DA))
             }
         }
         if (artifact.pieces.isNotEmpty()) {
             RarityCard(artifact.rarity) {
-                Text("Pieces", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                Text(localized("Pieces", "Bagian Artifact"), fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 Spacer(Modifier.height(4.dp))
                 artifact.pieces.forEach { piece ->
                     Row(Modifier.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1497,7 +1533,7 @@ private fun Teams(db: DB, store: Store, refresh: Int) {
                 val resonance = elements.filterValues { it >= 2 }.keys.joinToString().ifBlank { "No duplicate element yet" }
                 Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF101A30))) {
                     Column(Modifier.padding(12.dp)) {
-                        Text("Team Snapshot", fontWeight = FontWeight.Bold)
+                        Text(localized("Team Snapshot", "Ringkasan Tim"), fontWeight = FontWeight.Bold)
                         Text("Members: ${chosen.size}/4", fontSize = 11.sp, color = Color(0xFFB6C1DA))
                         Text("Elements: ${elements.entries.joinToString { "${it.key} ×${it.value}" }}", fontSize = 11.sp, color = Color(0xFFB6C1DA))
                         Text("Potential resonance: $resonance", fontSize = 11.sp, color = Color(0xFFB6C1DA))
@@ -1507,7 +1543,7 @@ private fun Teams(db: DB, store: Store, refresh: Int) {
             }
         }
         item {
-            Text("Preset Team Ideas", fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp))
+            Text(localized("Preset Team Ideas", "Ide Tim Preset"), fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp))
         }
         items(db.teams) { team ->
             Card(
@@ -1589,13 +1625,13 @@ private fun Tools() {
                     Modifier.padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(7.dp)
                 ) {
-                    Text("Damage Calculator", fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                    Text(localized("Damage Calculator", "Kalkulator Damage"), fontSize = 19.sp, fontWeight = FontWeight.Bold)
                     Num("ATK", atk) { atk = it }
-                    Num("Talent %", multiplier) { multiplier = it }
-                    Num("DMG Bonus %", bonus) { bonus = it }
-                    Num("Crit DMG %", crit) { crit = it }
-                    Num("RES %", resistance) { resistance = it }
-                    Num("Reaction ×", reaction) { reaction = it }
+                    Num(localized("Talent %", "Talent %"), multiplier) { multiplier = it }
+                    Num(localized("DMG Bonus %", "Bonus DMG %"), bonus) { bonus = it }
+                    Num(localized("Crit DMG %", "Crit DMG %"), crit) { crit = it }
+                    Num(localized("RES %", "RES %"), resistance) { resistance = it }
+                    Num(localized("Reaction ×", "Reaksi ×"), reaction) { reaction = it }
                     Button(onClick = {
                         val a = atk.toDoubleOrNull() ?: 0.0
                         val m = (multiplier.toDoubleOrNull() ?: 0.0) / 100.0
@@ -1613,7 +1649,10 @@ private fun Tools() {
                     }) { Text(localized("Calculate", "Hitung")) }
                     Text(result, fontSize = 29.sp, fontWeight = FontWeight.Bold)
                     Text(
-                        "Basic model; defense/buffs/ICD/reaction-specific formulas will be data-driven in the engine layer.",
+                        localized(
+                            "Basic model; defense/buffs/ICD/reaction-specific formulas will be data-driven in the engine layer.",
+                            "Model dasar; formula defense/buff/ICD/reaksi spesifik akan berbasis data di engine berikutnya."
+                        ),
                         fontSize = 10.sp,
                         color = Color(0xFF8995B3)
                     )
@@ -1627,13 +1666,16 @@ private fun Tools() {
                     Modifier.padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(7.dp)
                 ) {
-                    Text("Material Calculator", fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Num("From level", levelFrom) { levelFrom = it }
-                    Num("To level", levelTo) { levelTo = it }
-                    Num("Owned material", materialOwned) { materialOwned = it }
-                    Text("Planning shell: $levelFrom → $levelTo", color = Color(0xFFB6C1DA))
+                    Text(localized("Material Calculator", "Kalkulator Material"), fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Num(localized("From level", "Dari level"), levelFrom) { levelFrom = it }
+                    Num(localized("To level", "Sampai level"), levelTo) { levelTo = it }
+                    Num(localized("Owned material", "Material dimiliki"), materialOwned) { materialOwned = it }
+                    Text(localized("Planning shell: $levelFrom → $levelTo", "Rencana: $levelFrom → $levelTo"), color = Color(0xFFB6C1DA))
                     Text(
-                        "Exact Mora/XP/material totals will be read from the full material dataset.",
+                        localized(
+                            "Exact Mora/XP/material totals will be read from the full material dataset.",
+                            "Total Mora/XP/material yang pasti akan diambil dari dataset material lengkap."
+                        ),
                         fontSize = 10.sp,
                         color = Color(0xFF8995B3)
                     )
@@ -1644,7 +1686,7 @@ private fun Tools() {
             Spacer(Modifier.height(12.dp))
             Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF171F36))) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("Readiness Score (Coming Next)", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = AppSecondary)
+                    Text(localized("Readiness Score (Coming Next)", "Readiness Score (Segera Hadir)"), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = AppSecondary)
                     Text(
                         "Fitur berikutnya: pilih tim dari roster kamu (level senjata/artifact opsional) lalu app menghitung perkiraan persentase kemungkinan clear untuk domain/konten tertentu, berdasarkan data talent resmi + rekomendasi elemen domain. Ini estimasi heuristik, bukan simulator combat 100% akurat.",
                         fontSize = 11.sp,
@@ -1696,7 +1738,7 @@ private fun EnemiesScreen(db: DB, onBack: () -> Unit, onSelect: (Enemy) -> Unit)
                     modifier = Modifier.padding(bottom = 8.dp).horizontalScroll(rememberScrollState())
                 ) {
                     categories.forEach { c ->
-                        FilterChip(selected = category == c, onClick = { category = c }, label = { Text(c, fontSize = 9.sp) })
+                        FilterChip(selected = category == c, onClick = { category = c }, label = { Text(filterLabel(c), fontSize = 9.sp) })
                     }
                 }
             }
@@ -1746,7 +1788,7 @@ private fun EnemyDetail(enemy: Enemy, close: () -> Unit) {
             }
             if (enemy.drops.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))
-                Text("Drops", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = accent)
+                Text(localized("Drops", "Item Drop"), fontWeight = FontWeight.Bold, fontSize = 12.sp, color = accent)
                 Text(enemy.drops.joinToString(" · "), fontSize = 11.sp, color = Color(0xFFB6C1DA))
             }
             if (enemy.description.isBlank() && enemy.drops.isEmpty()) {
@@ -1798,7 +1840,7 @@ private fun DomainsScreen(db: DB, onBack: () -> Unit) {
             modifier = Modifier.horizontalScroll(rememberScrollState())
         ) {
             regions.forEach { r ->
-                FilterChip(selected = region == r, onClick = { region = r }, label = { Text(r, fontSize = 9.sp) })
+                FilterChip(selected = region == r, onClick = { region = r }, label = { Text(filterLabel(r), fontSize = 9.sp) })
             }
         }
         Spacer(Modifier.height(6.dp))
@@ -1866,7 +1908,7 @@ private fun SplashScreen(error: Boolean = false) {
                 Text("✦", fontSize = 48.sp, fontWeight = FontWeight.Bold, color = Color(0xFF101527))
             }
             Spacer(Modifier.height(18.dp))
-            Text("Genshin Insight", fontSize = 25.sp, fontWeight = FontWeight.Bold)
+            Text("Genshin Insight", fontSize = 25.sp, fontWeight = FontWeight.Bold, color = Color.White)
             Text("~Dias~", fontSize = 18.sp, color = AppSecondary, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(8.dp))
             if (error) {
@@ -1899,13 +1941,13 @@ private fun WallpaperGallery(db: DB, onBack: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(horizontal = 13.dp)) {
         Row(Modifier.padding(top = 14.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") }
-            Column { Text("Wallpaper Gallery", fontSize = 24.sp, fontWeight = FontWeight.Bold); Text("~Dias~ Collection", fontSize = 11.sp, color = AppSecondary) }
+            Column { Text(localized("Wallpaper Gallery", "Galeri Wallpaper"), fontSize = 24.sp, fontWeight = FontWeight.Bold); Text("~Dias~ Collection", fontSize = 11.sp, color = AppSecondary) }
         }
         Row(
             horizontalArrangement = Arrangement.spacedBy(5.dp),
             modifier = Modifier.horizontalScroll(rememberScrollState())
         ) {
-            listOf("All", "Character", "Region", "Mobile").forEach { c -> FilterChip(selected = category == c, onClick = { category = c }, label = { Text(c, fontSize = 9.sp) }) }
+            listOf("All", "Character", "Region", "Mobile").forEach { c -> FilterChip(selected = category == c, onClick = { category = c }, label = { Text(filterLabel(c), fontSize = 9.sp) }) }
         }
         if (status.isNotEmpty()) Text(status, color = AppPrimary, fontSize = 10.sp, modifier = Modifier.padding(vertical = 5.dp))
         LazyVerticalGrid(columns = GridCells.Adaptive(155.dp), contentPadding = PaddingValues(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1923,7 +1965,7 @@ private fun WallpaperGallery(db: DB, onBack: () -> Unit) {
                                     val ok = setWallpaperFromUrl(wp.url)
                                     status = if (ok) "Wallpaper berhasil dipasang: ${wp.title}" else "Gagal memasang. Pastikan internet aktif dan gambar tersedia."
                                 }
-                            }, modifier = Modifier.fillMaxWidth()) { Text("Set Wallpaper", fontSize = 10.sp) }
+                            }, modifier = Modifier.fillMaxWidth()) { Text(localized("Set Wallpaper", "Pasang Wallpaper"), fontSize = 10.sp) }
                         }
                     }
                 }
@@ -1990,7 +2032,7 @@ private fun CommunityScreen(onBack: () -> Unit) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.Star, contentDescription = null, tint = AppSecondary)
                             Spacer(Modifier.width(6.dp))
-                            Text("Featured Creator", fontWeight = FontWeight.Bold, color = AppSecondary)
+                            Text(localized("Featured Creator", "Creator Pilihan"), fontWeight = FontWeight.Bold, color = AppSecondary)
                         }
                         Spacer(Modifier.height(6.dp))
                         Text("Kokobear", fontSize = 19.sp, fontWeight = FontWeight.Bold)
@@ -2083,7 +2125,7 @@ private fun CommunityScreen(onBack: () -> Unit) {
                     Row(Modifier.padding(13.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Forum, contentDescription = null, tint = AppPrimary)
                         Spacer(Modifier.width(8.dp))
-                        Text("HoYoLAB Community", modifier = Modifier.weight(1f), fontSize = 12.sp)
+                        Text(localized("HoYoLAB Community", "Komunitas HoYoLAB"), modifier = Modifier.weight(1f), fontSize = 12.sp)
                         Icon(Icons.Default.ChevronRight, contentDescription = null)
                     }
                 }
@@ -2106,6 +2148,8 @@ private fun More(
     var screen by remember { mutableStateOf("main") }
     val scope = rememberCoroutineScope()
 
+    BackHandler(enabled = screen != "main") { screen = "main" }
+
     when (screen) {
         "wallpaper" -> { WallpaperGallery(db) { screen = "main" }; return }
         "community" -> { CommunityScreen { screen = "main" }; return }
@@ -2124,9 +2168,15 @@ private fun More(
                     Modifier.padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Text("Local Database", fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Text("${db.characters.size} characters · ${db.weapons.size} weapons · ${db.artifacts.size} artifacts · ${db.enemies.size} enemies")
-                    Text("Roster ${store.get("roster").size} · Favorites ${store.get("fav").size}")
+                    Text(localized("Local Database", "Database Lokal"), fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text(localized(
+                        "${db.characters.size} characters · ${db.weapons.size} weapons · ${db.artifacts.size} artifacts · ${db.enemies.size} enemies",
+                        "${db.characters.size} karakter · ${db.weapons.size} senjata · ${db.artifacts.size} artifact · ${db.enemies.size} musuh"
+                    ))
+                    Text(localized(
+                        "Roster ${store.get("roster").size} · Favorites ${store.get("fav").size}",
+                        "Roster ${store.get("roster").size} · Favorit ${store.get("fav").size}"
+                    ))
                     Text("Sumber data: ${repository.lastStatus.source}" + (repository.lastStatus.generatedAt?.let { " · diambil $it" } ?: ""), fontSize = 10.sp, color = Color(0xFF8995B3))
                 }
             }
@@ -2161,20 +2211,36 @@ private fun More(
             Text("Jelajahi", fontSize = 18.sp, fontWeight = FontWeight.Bold)
         }
         item {
-            FeatureRow("Monster & Boss Database", "${db.enemies.size} musuh · deskripsi & drop item", Icons.Default.Whatshot) { screen = "enemies" }
+            FeatureRow(
+                localized("Monster & Boss Database", "Database Monster & Boss"),
+                localized("${db.enemies.size} enemies · description & drops", "${db.enemies.size} musuh · deskripsi & drop item"),
+                Icons.Default.Whatshot
+            ) { screen = "enemies" }
         }
         item {
-            FeatureRow("Peta & Domain", "${db.domains.size} domain · peta interaktif resmi", Icons.Default.Map) { screen = "domains" }
+            FeatureRow(
+                localized("Map & Domains", "Peta & Domain"),
+                localized("${db.domains.size} domains · official interactive map", "${db.domains.size} domain · peta interaktif resmi"),
+                Icons.Default.Map
+            ) { screen = "domains" }
         }
         item {
-            FeatureRow("Community & Guides", "Creator, tips video, KQM, wiki", Icons.Default.Groups) { screen = "community" }
+            FeatureRow(
+                localized("Community & Guides", "Community & Guides"),
+                localized("Creators, tips videos, KQM, wiki", "Creator, tips video, KQM, wiki"),
+                Icons.Default.Groups
+            ) { screen = "community" }
         }
         item {
-            FeatureRow("Wallpaper Gallery", "Pilih wallpaper dan set ke layar HP", Icons.Default.Wallpaper) { screen = "wallpaper" }
+            FeatureRow(
+                localized("Wallpaper Gallery", "Galeri Wallpaper"),
+                localized("Pick a wallpaper and set it on your phone", "Pilih wallpaper dan set ke layar HP"),
+                Icons.Default.Wallpaper
+            ) { screen = "wallpaper" }
         }
         item {
             Spacer(Modifier.height(12.dp))
-            Text("Data Updates", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text(localized("Data Updates", "Update Data"), fontSize = 18.sp, fontWeight = FontWeight.Bold)
             Text(
                 "Data diambil otomatis dari repo GitHub (auto-refresh harian via GitHub Actions). Tekan tombol di bawah untuk paksa ambil versi terbaru sekarang.",
                 fontSize = 11.sp,
@@ -2184,7 +2250,7 @@ private fun More(
                 repository.clearCache()
                 message = "Cache dibersihkan. Buka ulang app untuk mengambil data terbaru."
                 onChange()
-            }) { Text("Refresh Data") }
+            }) { Text(localized("Refresh Data", "Segarkan Data")) }
             if (message.isNotEmpty()) {
                 Text(message, color = AppPrimary, fontSize = 11.sp)
             }
