@@ -51,6 +51,15 @@ import kotlinx.coroutines.withContext
 private data class TalentInfo(val name: String, val description: String)
 private data class ConstellationInfo(val level: String, val name: String, val description: String)
 private data class RefinementInfo(val refinement: String, val description: String)
+private data class AscendCost(val name: String, val count: Int, val icon: String?)
+
+// Ascension breakpoints are fixed game mechanics (level cap goes 20/40/50/
+// 60/70/80/90 for every character and weapon since launch), not something
+// that changes per patch, so it's safe to hardcode rather than pull from data.
+// AscendStageKeys[i] is the cost key needed to go from AscendLevelLabels[i]
+// to AscendLevelLabels[i+1]; the first interval (Lv1-20) needs no ascension.
+private val AscendLevelLabels = listOf("Lv1", "Lv20", "Lv40", "Lv50", "Lv60", "Lv70", "Lv80", "Lv90")
+private val AscendStageKeys = listOf(null, "ascend1", "ascend2", "ascend3", "ascend4", "ascend5", "ascend6")
 private data class ArtifactPiece(val slot: String, val name: String, val description: String, val image: String?)
 
 private data class Character(
@@ -68,6 +77,7 @@ private data class Character(
     val card: String?,
     val splash: String?,
     val fandomUrl: String?,
+    val ascensionCosts: Map<String, List<AscendCost>>,
     val talents: List<TalentInfo>,
     val passives: List<TalentInfo>,
     val constellations: List<ConstellationInfo>,
@@ -85,6 +95,7 @@ private data class Weapon(
     val mainStatValue: String,
     val effectName: String,
     val refinements: List<RefinementInfo>,
+    val ascensionCosts: Map<String, List<AscendCost>>,
     val icon: String?
 )
 
@@ -167,6 +178,27 @@ private data class DB(
             return buildList { for (i in 0 until arr.length()) add(arr.optString(i)) }
         }
 
+        private fun parseAscendCosts(item: JSONObject): Map<String, List<AscendCost>> {
+            val obj = item.optJSONObject("ascensionCosts") ?: return emptyMap()
+            val result = mutableMapOf<String, List<AscendCost>>()
+            obj.keys().forEach { stage ->
+                val arr = obj.optJSONArray(stage) ?: JSONArray()
+                result[stage] = buildList {
+                    for (i in 0 until arr.length()) {
+                        val cost = arr.getJSONObject(i)
+                        add(
+                            AscendCost(
+                                name = cost.optString("name"),
+                                count = cost.optInt("count"),
+                                icon = cost.optString("icon").ifBlank { null }
+                            )
+                        )
+                    }
+                }
+            }
+            return result
+        }
+
         fun parseCharacters(arr: JSONArray): List<Character> = buildList {
             for (i in 0 until arr.length()) {
                 val item = arr.getJSONObject(i)
@@ -207,6 +239,7 @@ private data class DB(
                         card = item.optString("card").ifBlank { null },
                         splash = item.optString("splash").ifBlank { null },
                         fandomUrl = item.optString("fandomUrl").ifBlank { null },
+                        ascensionCosts = parseAscendCosts(item),
                         talents = talents,
                         passives = passives,
                         constellations = constellations,
@@ -241,6 +274,7 @@ private data class DB(
                         mainStatValue = item.optString("mainStatValue"),
                         effectName = item.optString("effectName"),
                         refinements = refinements,
+                        ascensionCosts = parseAscendCosts(item),
                         icon = item.optString("icon").ifBlank { null }
                     )
                 )
@@ -856,7 +890,11 @@ private fun DetailScaffold(
     topActions: @Composable RowScope.() -> Unit = {},
     content: @Composable ColumnScope.() -> Unit
 ) {
-    Box(Modifier.fillMaxSize().background(AppBackground)) {
+    // Surface (unlike a plain Box+background) propagates a correct default
+    // LocalContentColor to descendants, which is why AlertDialog-based detail
+    // screens never needed explicit text colors but this full-screen version
+    // did - any Text() here without an explicit color was rendering black.
+    Surface(modifier = Modifier.fillMaxSize(), color = AppBackground, contentColor = Color(0xFFE7E9F5)) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
             Box(Modifier.fillMaxWidth().height(260.dp)) {
                 Box(
@@ -944,7 +982,7 @@ private fun CharacterDetail(character: Character, store: Store, close: () -> Uni
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             modifier = Modifier.horizontalScroll(rememberScrollState())
         ) {
-            listOf("Overview", "Talents", "Constellations", "Build").forEach { value ->
+            listOf("Overview", "Talents", "Constellations", "Level Up", "Build").forEach { value ->
                 FilterChip(
                     selected = section == value,
                     onClick = { section = value },
@@ -990,6 +1028,9 @@ private fun CharacterDetail(character: Character, store: Store, close: () -> Uni
                         character.constellations.forEach { InfoBlock("${it.level.uppercase()} · ${it.name}", it.description) }
                     }
                 }
+                "Level Up" -> Column {
+                    LevelUpCalculator(character.ascensionCosts, accent)
+                }
                 "Build" -> Column {
                     Text("Build Workspace", fontWeight = FontWeight.Bold)
                     Text(
@@ -1032,6 +1073,81 @@ private fun RarityCard(rarity: Int, content: @Composable ColumnScope.() -> Unit)
         colors = CardDefaults.cardColors(containerColor = Color(0xFF141B2F))
     ) {
         Column(Modifier.padding(14.dp), content = content)
+    }
+}
+
+/** Level-up material calculator shared by CharacterDetail and WeaponDetail. */
+@Composable
+private fun LevelUpCalculator(costs: Map<String, List<AscendCost>>, accent: Color) {
+    if (costs.values.all { it.isEmpty() }) {
+        Missing("Ascension material list")
+        return
+    }
+    var fromIndex by remember { mutableIntStateOf(0) }
+    var toIndex by remember { mutableIntStateOf(AscendLevelLabels.lastIndex) }
+
+    Text("Dari level", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = accent)
+    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+        AscendLevelLabels.dropLast(1).forEachIndexed { i, label ->
+            FilterChip(
+                selected = fromIndex == i,
+                onClick = { fromIndex = i; if (toIndex <= i) toIndex = i + 1 },
+                label = { Text(label, fontSize = 9.sp) }
+            )
+        }
+    }
+    Spacer(Modifier.height(6.dp))
+    Text("Sampai level", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = accent)
+    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+        AscendLevelLabels.drop(1).forEachIndexed { offset, label ->
+            val i = offset + 1
+            FilterChip(
+                selected = toIndex == i,
+                onClick = { if (i > fromIndex) toIndex = i },
+                label = { Text(label, fontSize = 9.sp) }
+            )
+        }
+    }
+    Spacer(Modifier.height(10.dp))
+
+    val totals = remember(fromIndex, toIndex, costs) {
+        val agg = linkedMapOf<String, Pair<Int, String?>>()
+        for (i in fromIndex until toIndex) {
+            val key = AscendStageKeys.getOrNull(i) ?: continue
+            costs[key]?.forEach { c ->
+                val prev = agg[c.name]
+                agg[c.name] = (((prev?.first ?: 0) + c.count) to (prev?.second ?: c.icon))
+            }
+        }
+        agg
+    }
+
+    if (totals.isEmpty()) {
+        Text("Nggak butuh material ascension di rentang level ini.", fontSize = 11.sp, color = Color(0xFF9DA9C7))
+    } else {
+        Text(
+            "Total material ${AscendLevelLabels[fromIndex]} → ${AscendLevelLabels[toIndex]}:",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(Modifier.height(6.dp))
+        totals.forEach { (name, pair) ->
+            Row(Modifier.padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier.size(30.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFF252F51)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (pair.second != null) {
+                        AsyncImage(model = pair.second, contentDescription = name, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                    } else {
+                        Text(name.take(1), fontSize = 10.sp)
+                    }
+                }
+                Spacer(Modifier.width(8.dp))
+                Text(name, modifier = Modifier.weight(1f), fontSize = 11.sp)
+                Text("×${pair.first}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = accent)
+            }
+        }
     }
 }
 
@@ -1163,6 +1279,11 @@ private fun WeaponDetail(weapon: Weapon, close: () -> Unit) {
                     weapon.refinements.forEach { InfoBlock(it.refinement, it.description) }
                 }
             }
+        }
+        RarityCard(weapon.rarity) {
+            Text("Level Up", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = accent)
+            Spacer(Modifier.height(8.dp))
+            LevelUpCalculator(weapon.ascensionCosts, accent)
         }
     }
 }

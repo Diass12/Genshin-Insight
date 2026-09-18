@@ -43,7 +43,36 @@ function monsterIconUrl(filenameIcon) {
   return filenameIcon ? `https://gi.yatta.moe/assets/UI/monster/${filenameIcon}.png` : null;
 }
 
-function buildCharacters() {
+// Ascension/level-up cost entries only carry {id, name, count} - no icon.
+// Build a name -> icon lookup once from the materials folder (and Mora,
+// which isn't in that folder) so we can attach real item art to costs.
+function buildMaterialIconLookup() {
+  const lookup = { Mora: enkaUrl('UI_ItemIcon_202') };
+  const names = genshindb.materials('names', { matchCategories: true });
+  for (const name of names) {
+    const m = genshindb.materials(name);
+    if (m?.name && m.images?.filename_icon) {
+      lookup[m.name] = enkaUrl(m.images.filename_icon);
+    }
+  }
+  return lookup;
+}
+
+function enrichCosts(costs, materialIcons) {
+  if (!costs) return null;
+  const result = {};
+  for (const stage of Object.keys(costs)) {
+    result[stage] = (costs[stage] || []).map((item) => ({
+      id: item.id,
+      name: item.name,
+      count: item.count,
+      icon: materialIcons[item.name] || null,
+    }));
+  }
+  return result;
+}
+
+function buildCharacters(materialIcons) {
   const names = genshindb.characters('names', { matchCategories: true });
   const out = [];
   for (const name of names) {
@@ -78,7 +107,7 @@ function buildCharacters() {
       portrait: pickImage(c.images, 'portrait'),
       splash: pickImage(c.images, 'cover1', 'cover2'),
       fandomUrl: c.url?.fandom || null,
-      ascensionCosts: c.costs || null,
+      ascensionCosts: enrichCosts(c.costs, materialIcons),
       talents: (talentData ? [talentData.combat1, talentData.combat2, talentData.combat3]
         .filter(Boolean)
         .map((t) => ({ name: t.name, description: t.description })) : []),
@@ -94,7 +123,7 @@ function buildCharacters() {
   return out.sort((a, b) => b.rarity - a.rarity || a.name.localeCompare(b.name));
 }
 
-function buildWeapons() {
+function buildWeapons(materialIcons) {
   const names = genshindb.weapons('names', { matchCategories: true });
   const out = [];
   for (const name of names) {
@@ -113,6 +142,7 @@ function buildWeapons() {
       refinements: ['r1', 'r2', 'r3', 'r4', 'r5']
         .filter((k) => w[k])
         .map((k) => ({ refinement: k.toUpperCase(), description: w[k].description })),
+      ascensionCosts: enrichCosts(w.costs, materialIcons),
       icon: enkaUrl(w.images?.filename_icon) || pickImage(w.images, 'mihoyo_icon', 'icon'),
       awakenIcon: enkaUrl(w.images?.filename_awakenIcon) || pickImage(w.images, 'mihoyo_awakenIcon', 'awakenicon'),
     });
@@ -220,8 +250,9 @@ function writeJson(filename, data) {
 function main() {
   fs.mkdirSync(OUT_DIR, { recursive: true });
 
-  const characters = buildCharacters();
-  const weapons = buildWeapons();
+  const materialIcons = buildMaterialIconLookup();
+  const characters = buildCharacters(materialIcons);
+  const weapons = buildWeapons(materialIcons);
   const artifacts = buildArtifacts();
   const enemies = buildEnemies();
   const domains = buildDomains();
