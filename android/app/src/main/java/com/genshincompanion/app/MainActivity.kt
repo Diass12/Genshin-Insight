@@ -107,6 +107,19 @@ private data class Enemy(
 )
 
 private data class Team(val name: String, val core: List<String>, val focus: String)
+
+private data class Domain(
+    val id: String,
+    val name: String,
+    val type: String,
+    val region: String,
+    val entrance: String,
+    val description: String,
+    val recommendedLevel: Int?,
+    val recommendedElements: List<String>,
+    val monsters: List<String>,
+    val rewardItems: List<String>
+)
 private data class Wallpaper(val title: String, val category: String, val url: String)
 
 private enum class Tab(val label: String) {
@@ -143,7 +156,8 @@ private data class DB(
     val weapons: List<Weapon>,
     val artifacts: List<Artifact>,
     val enemies: List<Enemy>,
-    val teams: List<Team>
+    val teams: List<Team>,
+    val domains: List<Domain>
 ) {
     companion object {
         private fun stringList(obj: JSONObject, key: String): List<String> {
@@ -287,6 +301,26 @@ private data class DB(
                 add(Team(item.optString("name"), members, item.optString("focus")))
             }
         }
+
+        fun parseDomains(arr: JSONArray): List<Domain> = buildList {
+            for (i in 0 until arr.length()) {
+                val item = arr.getJSONObject(i)
+                add(
+                    Domain(
+                        id = item.optString("id"),
+                        name = item.optString("name"),
+                        type = item.optString("type"),
+                        region = item.optString("region", "Teyvat"),
+                        entrance = item.optString("entrance"),
+                        description = item.optString("description"),
+                        recommendedLevel = if (item.has("recommendedLevel") && !item.isNull("recommendedLevel")) item.optInt("recommendedLevel") else null,
+                        recommendedElements = stringList(item, "recommendedElements"),
+                        monsters = stringList(item, "monsters"),
+                        rewardItems = stringList(item, "rewardItems")
+                    )
+                )
+            }
+        }
     }
 }
 
@@ -319,7 +353,8 @@ private fun App(repository: DataRepository, store: Store) {
             val artifacts = DB.parseArtifacts(repository.loadArray("artifacts.json"))
             val enemies = DB.parseEnemies(repository.loadArray("enemies.json"))
             val teams = DB.parseTeams(repository.loadArray("teams.json"))
-            DB(characters, weapons, artifacts, enemies, teams)
+            val domains = DB.parseDomains(repository.loadArray("domains.json"))
+            DB(characters, weapons, artifacts, enemies, teams, domains)
         }.onSuccess { db = it }
             .onFailure { loadError = true }
     }
@@ -1383,6 +1418,108 @@ private fun EnemyDetail(enemy: Enemy, close: () -> Unit) {
 }
 
 @Composable
+private fun DomainsScreen(db: DB, onBack: () -> Unit) {
+    val context = LocalContext.current
+    fun openUrl(url: String) {
+        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+    }
+    var query by remember { mutableStateOf("") }
+    var region by remember { mutableStateOf("All") }
+    var expanded by remember { mutableStateOf<String?>(null) }
+    val regions = listOf("All") + db.domains.map { it.region }.filter { it.isNotBlank() }.distinct()
+    val filtered = db.domains.filter {
+        (query.isBlank() || it.name.contains(query, ignoreCase = true)) &&
+            (region == "All" || it.region == region)
+    }
+    Column(Modifier.fillMaxSize().padding(horizontal = 13.dp)) {
+        Row(Modifier.padding(top = 14.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, contentDescription = "Back") }
+            Column { Text("Peta & Domain", fontSize = 20.sp, fontWeight = FontWeight.Bold); Text("${db.domains.size} domain terdaftar", fontSize = 10.sp, color = Color(0xFF9DA9C7)) }
+        }
+        Button(
+            onClick = { openUrl("https://act.hoyolab.com/ys/app/interactive-map/index.html") },
+            modifier = Modifier.fillMaxWidth()
+        ) { Text("🗺 Buka Peta Interaktif Resmi (HoYoLAB)") }
+        Text(
+            "Kita nggak punya data koordinat lokasi, jadi buat peta visual langsung pakai peta resmi ini. Daftar di bawah dari data domain yang kita generate otomatis.",
+            fontSize = 10.sp,
+            color = Color(0xFF8995B3),
+            modifier = Modifier.padding(top = 6.dp, bottom = 6.dp)
+        )
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            label = { Text("Search domain") }
+        )
+        Spacer(Modifier.height(6.dp))
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.horizontalScroll(rememberScrollState())
+        ) {
+            regions.forEach { r ->
+                FilterChip(selected = region == r, onClick = { region = r }, label = { Text(r, fontSize = 9.sp) })
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        LazyColumn(contentPadding = PaddingValues(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            items(filtered) { domain ->
+                Card(
+                    modifier = Modifier.fillMaxWidth().clickable {
+                        expanded = if (expanded == domain.id) null else domain.id
+                    },
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF141B2F))
+                ) {
+                    Column(Modifier.padding(12.dp)) {
+                        Text(domain.name, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Text(
+                            "${domain.type} · ${domain.region}" + (domain.entrance.takeIf { it.isNotBlank() }?.let { " · $it" } ?: ""),
+                            fontSize = 10.sp,
+                            color = Color(0xFF9DA9C7)
+                        )
+                        if (domain.recommendedLevel != null || domain.recommendedElements.isNotEmpty()) {
+                            Text(
+                                "Rekomendasi: " +
+                                    listOfNotNull(
+                                        domain.recommendedLevel?.let { "Lv $it" },
+                                        domain.recommendedElements.takeIf { it.isNotEmpty() }?.joinToString(),
+                                    ).joinToString(" · "),
+                                fontSize = 10.sp,
+                                color = Color(0xFFB6C1DA)
+                            )
+                        }
+                        if (expanded == domain.id) {
+                            Spacer(Modifier.height(6.dp))
+                            if (domain.description.isNotBlank()) {
+                                Text(domain.description, fontSize = 11.sp, color = Color(0xFF9DA9C7))
+                                Spacer(Modifier.height(4.dp))
+                            }
+                            if (domain.monsters.isNotEmpty()) {
+                                Text("Musuh: ${domain.monsters.joinToString()}", fontSize = 10.sp, color = Color(0xFF9DA9C7))
+                            }
+                            if (domain.rewardItems.isNotEmpty()) {
+                                Text("Reward: ${domain.rewardItems.joinToString()}", fontSize = 10.sp, color = Color(0xFF9DA9C7))
+                            }
+                        }
+                    }
+                }
+            }
+            if (filtered.isEmpty()) {
+                item {
+                    Text(
+                        "Belum ada data domain (buka app dengan internet dulu supaya data ter-fetch).",
+                        color = Color(0xFF8995B3),
+                        fontSize = 11.sp,
+                        modifier = Modifier.padding(top = 12.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun SplashScreen(error: Boolean = false) {
     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF0A0F1F), Color(0xFF151D35)))), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1632,6 +1769,7 @@ private fun More(
         "wallpaper" -> { WallpaperGallery(db) { screen = "main" }; return }
         "community" -> { CommunityScreen { screen = "main" }; return }
         "enemies" -> { EnemiesScreen(db, onBack = { screen = "main" }, onSelect = openEnemy); return }
+        "domains" -> { DomainsScreen(db) { screen = "main" }; return }
     }
 
     LazyColumn(
@@ -1658,6 +1796,9 @@ private fun More(
         }
         item {
             FeatureRow("Monster & Boss Database", "${db.enemies.size} musuh · deskripsi & drop item", Icons.Default.Whatshot) { screen = "enemies" }
+        }
+        item {
+            FeatureRow("Peta & Domain", "${db.domains.size} domain · peta interaktif resmi", Icons.Default.Map) { screen = "domains" }
         }
         item {
             FeatureRow("Community & Guides", "Creator, tips video, KQM, wiki", Icons.Default.Groups) { screen = "community" }
