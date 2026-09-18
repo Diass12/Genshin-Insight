@@ -750,37 +750,57 @@ private fun Characters(db: DB, store: Store, onSelect: (Character) -> Unit) {
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             gridItems(filtered) { character ->
+                val ring = rarityColors(character.rarity)
                 Card(
-                    modifier = Modifier.clickable { onSelect(character) }.then(rarityBorder(character.rarity)),
+                    modifier = Modifier.clickable { onSelect(character) },
                     colors = CardDefaults.cardColors(containerColor = Color(0xFF141B2F))
                 ) {
-                    Column {
-                        Box {
-                            ImageBox(label = character.name, url = character.icon, height = 155)
+                    Column(
+                        Modifier.fillMaxWidth().padding(vertical = 14.dp, horizontal = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Box(contentAlignment = Alignment.BottomEnd) {
                             Box(
-                                Modifier.padding(6.dp).size(8.dp).clip(CircleShape)
-                                    .background(elementColor(character.element)).align(Alignment.TopEnd)
-                            )
-                        }
-                        Column(Modifier.padding(8.dp)) {
-                            Row {
-                                Text(
-                                    character.name,
-                                    modifier = Modifier.weight(1f),
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1
-                                )
-                                if (favorites.contains(character.id)) {
-                                    Text("★", color = AppSecondary)
+                                Modifier.size(78.dp).clip(CircleShape)
+                                    .background(Brush.linearGradient(ring))
+                                    .padding(2.5.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF1B2338)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (character.icon != null) {
+                                    AsyncImage(
+                                        model = character.icon,
+                                        contentDescription = character.name,
+                                        modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                } else {
+                                    Text(character.name.take(1), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = ring.first())
                                 }
                             }
-                            Text(
-                                "${character.element} · ${character.weapon}",
-                                fontSize = 10.sp,
-                                color = Color(0xFF9DA9C7)
+                            Box(
+                                Modifier.size(20.dp).clip(CircleShape)
+                                    .background(elementColor(character.element))
+                                    .border(1.5.dp, Color(0xFF141B2F), CircleShape)
                             )
-                            Text(character.region, fontSize = 9.sp, color = Color(0xFF77839F))
+                            if (favorites.contains(character.id)) {
+                                Box(
+                                    Modifier.align(Alignment.TopStart).size(18.dp).clip(CircleShape)
+                                        .background(Color(0xFF141B2F)),
+                                    contentAlignment = Alignment.Center
+                                ) { Text("★", fontSize = 11.sp, color = AppSecondary) }
+                            }
                         }
+                        Spacer(Modifier.height(8.dp))
+                        Text(character.name, fontWeight = FontWeight.Bold, maxLines = 1, fontSize = 13.sp)
+                        Text(
+                            "${character.element} · ${character.weapon}",
+                            fontSize = 9.sp,
+                            color = Color(0xFF9DA9C7),
+                            maxLines = 1
+                        )
+                        Text(character.region, fontSize = 9.sp, color = Color(0xFF77839F))
                     }
                 }
             }
