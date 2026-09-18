@@ -449,6 +449,7 @@ private fun Home(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item { Header("✦ Genshin Insight", "V6 Native Android · Auto-updating data") }
+        item { NewsAndBannerCard() }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF151D35))) {
                 Column(Modifier.padding(17.dp)) {
@@ -485,6 +486,39 @@ private fun Home(
                     "Belum ada karakter. Tambahkan dari Character Database.",
                     color = Color(0xFF8995B3)
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun NewsAndBannerCard() {
+    val context = LocalContext.current
+    fun openUrl(url: String) {
+        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+    }
+    Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF1C1530))) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Campaign, contentDescription = null, tint = AppSecondary)
+                Spacer(Modifier.width(6.dp))
+                Text("News & Banner", fontWeight = FontWeight.Bold, color = AppSecondary)
+            }
+            Text(
+                "Nama banner nggak kita simpan di app (ganti tiap ~3 minggu dan genshin-db nggak nyimpen jadwal gacha), jadi ini langsung ke sumber yang selalu update sendiri.",
+                fontSize = 10.sp,
+                color = Color(0xFF9DA9C7)
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.horizontalScroll(rememberScrollState())
+            ) {
+                OpenUrlButton("🎴 Banner Sekarang", "https://gi.yatta.moe/en/banner/character")
+                OpenUrlButton(
+                    "🔮 Bocoran Banner Berikutnya",
+                    "https://www.youtube.com/results?search_query=${Uri.encode("Genshin Impact next banner leak")}"
+                )
+                OpenUrlButton("📰 Berita Resmi", "https://genshin.hoyoverse.com/en/news")
             }
         }
     }
