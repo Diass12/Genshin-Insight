@@ -32,7 +32,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.graphicsLayer
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -1122,7 +1122,7 @@ private fun CharacterDetail(character: Character, store: Store, close: () -> Uni
                         Icon(
                             sectionIcon(value),
                             contentDescription = null,
-                            modifier = Modifier.size(16.dp).graphicsLayer(scaleX = scale, scaleY = scale)
+                            modifier = Modifier.size(16.dp).scale(scale)
                         )
                     },
                     colors = FilterChipDefaults.filterChipColors(selectedContainerColor = accent.copy(alpha = 0.35f))
