@@ -102,6 +102,9 @@ private data class Character(
     val region: String,
     val affiliation: String,
     val substat: String,
+    val birthday: String,
+    val cvEnglish: String,
+    val cvJapanese: String,
     val icon: String?,
     val card: String?,
     val splash: String?,
@@ -279,6 +282,9 @@ private data class DB(
                         region = item.optString("region"),
                         affiliation = item.optString("affiliation"),
                         substat = item.optString("substat"),
+                        birthday = item.optString("birthday"),
+                        cvEnglish = item.optString("cvEnglish"),
+                        cvJapanese = item.optString("cvJapanese"),
                         icon = item.optString("icon").ifBlank { null },
                         card = item.optString("card").ifBlank { null },
                         splash = item.optString("splash").ifBlank { null },
@@ -1113,7 +1119,7 @@ private fun CharacterDetail(character: Character, store: Store, close: () -> Uni
                             ProfileRow(localized("Region", "Region"), character.region)
                             if (character.affiliation.isNotBlank()) ProfileRow(localized("Affiliation", "Afiliasi"), character.affiliation)
                             if (character.substat.isNotBlank()) ProfileRow(localized("Ascension Stat", "Stat Ascension"), character.substat)
-                            if (character.birthday.isNotBlank()) ProfileRow(localized("Birthday", "Ulang Tahun"), character.birthday)
+                            if (character.1birthday.isNotBlank()) ProfileRow(localized("Birthday", "Ulang Tahun"), character.birthday)
                             if (character.cvEnglish.isNotBlank()) ProfileRow(localized("English VA", "VA Inggris"), character.cvEnglish)
                             if (character.cvJapanese.isNotBlank()) ProfileRow(localized("Japanese VA", "VA Jepang"), character.cvJapanese)
                         }
