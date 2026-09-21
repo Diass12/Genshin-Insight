@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:pathData="M0,0h108v108h-108z">
+        <aapt:attr xmlns:aapt="http://schemas.android.com/aapt" name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="8"
+                android:startY="8"
+                android:endX="100"
+                android:endY="100"
+                android:startColor="#3A2C6B"
+                android:centerColor="#22163F"
+                android:centerY="0.55"
+                android:endColor="#0A0F1F" />
+        </aapt:attr>
+    </path>
+    <!-- Soft glow accent behind the foreground sparkle -->
+    <path
+        android:pathData="M54,54m-30,0a30,30 0,1 1,60 0a30,30 0,1 1,-60 0"
+        android:fillColor="#33FFE3A3" />
+</vector>

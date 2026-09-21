@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Main sparkle, kept inside the ~66dp adaptive-icon safe zone -->
+    <path android:pathData="M54,23 C57,45 61,49 85,54 C61,59 57,63 54,85 C51,63 47,59 23,54 C47,49 51,45 54,23 Z">
+        <aapt:attr xmlns:aapt="http://schemas.android.com/aapt" name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="23"
+                android:startY="23"
+                android:endX="85"
+                android:endY="85"
+                android:startColor="#9AA6FF"
+                android:endColor="#E8C77B" />
+        </aapt:attr>
+    </path>
+    <!-- Small accent sparkle, upper-right -->
+    <path
+        android:pathData="M79,20 C80,26 81,28 88,30 C81,32 80,34 79,40 C78,34 77,32 70,30 C77,28 78,26 79,20 Z"
+        android:fillColor="#FFF3D6" />
+</vector>
