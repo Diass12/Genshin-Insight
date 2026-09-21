@@ -9,6 +9,7 @@ import android.graphics.BitmapFactory
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -31,6 +32,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -79,6 +81,28 @@ private fun sectionLabel(key: String): String = when (key) {
     "Constellations" -> localized("Constellations", "Constellation")
     "Level Up" -> localized("Level Up", "Naik Level")
     else -> key
+}
+
+private fun sectionIcon(key: String): androidx.compose.ui.graphics.vector.ImageVector = when (key) {
+    "Overview" -> Icons.Default.Info
+    "Talents" -> Icons.Default.Bolt
+    "Constellations" -> Icons.Default.AutoAwesome
+    "Level Up" -> Icons.Default.TrendingUp
+    else -> Icons.Default.Circle
+}
+
+// Emoji instead of vector Icons here - there's no real "sword/claymore/bow"
+// shape in the Material icon set, and emoji sidesteps guessing at icon
+// names that may not exist in the extended icon pack (already bit us once
+// with a plain typo; wrong icon names would be the same kind of build
+// break, just for a lower-stakes cosmetic).
+private fun weaponTypeEmoji(type: String): String? = when (type) {
+    "Sword" -> "🗡️"
+    "Claymore" -> "⚔️"
+    "Polearm" -> "🔱"
+    "Bow" -> "🏹"
+    "Catalyst" -> "📘"
+    else -> null
 }
 
 // Ascension breakpoints are fixed game mechanics (level cap goes 20/40/50/
@@ -835,7 +859,13 @@ private fun Characters(db: DB, store: Store, onSelect: (Character) -> Unit) {
                 FilterChip(
                     selected = element == value,
                     onClick = { element = value },
-                    label = { Text(filterLabel(value), fontSize = 9.sp) }
+                    label = { Text(filterLabel(value), fontSize = 9.sp) },
+                    leadingIcon = {
+                        val icon = elementIconUrl(value)
+                        if (icon != null) {
+                            AsyncImage(model = icon, contentDescription = value, modifier = Modifier.size(14.dp))
+                        }
+                    }
                 )
             }
         }
@@ -1082,10 +1112,19 @@ private fun CharacterDetail(character: Character, store: Store, close: () -> Uni
             modifier = Modifier.horizontalScroll(rememberScrollState())
         ) {
             listOf("Overview", "Talents", "Constellations", "Level Up").forEach { value ->
+                val isSelected = section == value
+                val scale by animateFloatAsState(if (isSelected) 1.15f else 1f, label = "sectionIconScale")
                 FilterChip(
-                    selected = section == value,
+                    selected = isSelected,
                     onClick = { section = value },
                     label = { Text(sectionLabel(value), fontSize = 9.sp) },
+                    leadingIcon = {
+                        Icon(
+                            sectionIcon(value),
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp).graphicsLayer(scaleX = scale, scaleY = scale)
+                        )
+                    },
                     colors = FilterChipDefaults.filterChipColors(selectedContainerColor = accent.copy(alpha = 0.35f))
                 )
             }
@@ -1376,7 +1415,11 @@ private fun Weapons(db: DB, onSelect: (Weapon) -> Unit) {
                 FilterChip(
                     selected = type == value,
                     onClick = { type = value },
-                    label = { Text(filterLabel(value), fontSize = 9.sp) }
+                    label = { Text(filterLabel(value), fontSize = 9.sp) },
+                    leadingIcon = {
+                        val emoji = weaponTypeEmoji(value)
+                        if (emoji != null) Text(emoji, fontSize = 12.sp)
+                    }
                 )
             }
         }
@@ -1438,6 +1481,18 @@ private fun WeaponDetail(weapon: Weapon, close: () -> Unit) {
         close = close
     ) {
         RarityCard(weapon.rarity) {
+            if (weapon.rarity <= 3) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("🔨 ", fontSize = 12.sp)
+                    Text(
+                        localized("Free-to-play: craftable at the Blacksmith", "F2P: bisa di-craft gratis di Blacksmith"),
+                        fontSize = 11.sp,
+                        color = Color(0xFF9CE0A0),
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+                Spacer(Modifier.height(6.dp))
+            }
             if (weapon.baseAtk != null) {
                 Text(localized("Base ATK", "ATK Dasar") + ": ${weapon.baseAtk.toInt()} · ${weapon.mainStat} ${weapon.mainStatValue}", fontSize = 12.sp, color = Color(0xFFB6C1DA))
             }
