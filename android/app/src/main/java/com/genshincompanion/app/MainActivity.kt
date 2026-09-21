@@ -1119,7 +1119,7 @@ private fun CharacterDetail(character: Character, store: Store, close: () -> Uni
                             ProfileRow(localized("Region", "Region"), character.region)
                             if (character.affiliation.isNotBlank()) ProfileRow(localized("Affiliation", "Afiliasi"), character.affiliation)
                             if (character.substat.isNotBlank()) ProfileRow(localized("Ascension Stat", "Stat Ascension"), character.substat)
-                            if (character.1birthday.isNotBlank()) ProfileRow(localized("Birthday", "Ulang Tahun"), character.birthday)
+                            if (character.birthday.isNotBlank()) ProfileRow(localized("Birthday", "Ulang Tahun"), character.birthday)
                             if (character.cvEnglish.isNotBlank()) ProfileRow(localized("English VA", "VA Inggris"), character.cvEnglish)
                             if (character.cvJapanese.isNotBlank()) ProfileRow(localized("Japanese VA", "VA Jepang"), character.cvJapanese)
                         }
