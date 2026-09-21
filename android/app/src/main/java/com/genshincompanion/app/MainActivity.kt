@@ -1056,7 +1056,7 @@ private fun CharacterDetail(character: Character, store: Store, close: () -> Uni
     DetailScaffold(
         title = character.name,
         subtitle = "${character.rarity}★ · ${character.element} · ${character.weapon} · ${character.region}",
-        heroImage = character.card ?: character.splash ?: character.icon,
+        heroImage = character.splash ?: character.card ?: character.icon,
         accent = accent,
         close = close,
         topActions = {

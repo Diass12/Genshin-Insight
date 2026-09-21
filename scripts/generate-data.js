@@ -115,7 +115,11 @@ function buildCharacters(materialIcons) {
       sideIcon: enkaUrl(c.images?.filename_sideIcon) || pickImage(c.images, 'mihoyo_sideIcon', 'sideIcon'),
       card: pickImage(c.images, 'card'),
       portrait: pickImage(c.images, 'portrait'),
-      splash: pickImage(c.images, 'cover1', 'cover2'),
+      // Gacha splash art (full body, tall) - reliable on Enka for every
+      // character tested including the newest ones, and far better suited
+      // to a hero banner than the square avatar icon, which gets cropped to
+      // near-unrecognizable when stretched to cover a wide/tall banner.
+      splash: enkaUrl(c.images?.filename_gachaSplash) || pickImage(c.images, 'cover1', 'cover2'),
       fandomUrl: c.url?.fandom || null,
       ascensionCosts: enrichCosts(c.costs, materialIcons),
       talents: talentKeys.filter((k) => talentData?.[k]).map((k) => ({
